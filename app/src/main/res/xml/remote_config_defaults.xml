@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<defaultsMap>
+    <entry>
+        <key>ads_enabled</key>
+        <value>true</value>
+    </entry>
+    <entry>
+        <key>interstitial_frequency_cap</key>
+        <value>3</value>
+    </entry>
+    <entry>
+        <key>premium_subscription_sku</key>
+        <value>premium_monthly_pass</value>
+    </entry>
+</defaultsMap>
