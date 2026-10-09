@@ -2,7 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { handleWallpapersRequest } from './server/api/wallpapers.js';
+import { 
+  handleWallpapersRequest, 
+  handleOfflinePackRequest, 
+  handleAutoChangeSettings,
+  handleDailyVerseRequest
+} from './server/api/wallpapers.js';
 import { handleSubscriptionVerification } from './server/api/verify-subscription.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,11 +23,19 @@ async function startServer() {
 
   // API Routes
   app.get('/api/wallpapers', handleWallpapersRequest);
+  app.get('/api/offline-pack', handleOfflinePackRequest);
+  app.get('/api/verse-of-the-day', handleDailyVerseRequest);
+  app.all('/api/auto-change-settings', handleAutoChangeSettings);
   app.post('/api/verify-subscription', handleSubscriptionVerification);
 
-  // Health check
+  // Health & Offline Server Status check
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ 
+      status: 'ok', 
+      offlineReady: true,
+      autoChangerInterval: '1 hour',
+      timestamp: new Date().toISOString() 
+    });
   });
 
   if (!isProd) {
@@ -41,7 +54,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Bible Wallpapers] Server listening at http://0.0.0.0:${PORT}`);
+    console.log(`[Bible Wallpapers] Server running at http://0.0.0.0:${PORT} with offline support and 1-hour auto-changer`);
   });
 }
 

@@ -54,10 +54,10 @@ export async function generateAndDownloadWallpaper(
 
         // Text styling
         let fontName = 'serif';
-        if (settings.fontStyle === 'playfair') fontName = "'Playfair Display', serif";
-        else if (settings.fontStyle === 'cinzel') fontName = "'Cinzel', serif";
-        else if (settings.fontStyle === 'script') fontName = "'Great Vibes', cursive";
-        else if (settings.fontStyle === 'sans') fontName = "'Plus Jakarta Sans', sans-serif";
+        if (settings.fontStyle === 'playfair') fontName = "'Playfair Display', 'Mukta Malar', 'Noto Serif Tamil', serif";
+        else if (settings.fontStyle === 'cinzel') fontName = "'Cinzel', 'Mukta Malar', 'Noto Serif Tamil', serif";
+        else if (settings.fontStyle === 'script') fontName = "'Great Vibes', 'Mukta Malar', cursive";
+        else if (settings.fontStyle === 'sans') fontName = "'Plus Jakarta Sans', 'Mukta Malar', sans-serif";
 
         let fontSize = 48;
         if (settings.fontSize === 'sm') fontSize = 40;

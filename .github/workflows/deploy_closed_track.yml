@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build-and-release:
@@ -12,6 +13,42 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Validate Required Secrets
+        run: |
+          MISSING_SECRETS=()
+          if [ -z "${{ secrets.PLAY_STORE_JSON_KEY }}" ]; then
+            MISSING_SECRETS+=("PLAY_STORE_JSON_KEY")
+          fi
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            MISSING_SECRETS+=("ANDROID_KEYSTORE_BASE64")
+          fi
+          if [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ]; then
+            MISSING_SECRETS+=("KEYSTORE_PASSWORD")
+          fi
+          if [ -z "${{ secrets.KEY_ALIAS }}" ]; then
+            MISSING_SECRETS+=("KEY_ALIAS")
+          fi
+          if [ -z "${{ secrets.KEY_PASSWORD }}" ]; then
+            MISSING_SECRETS+=("KEY_PASSWORD")
+          fi
+
+          if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+            echo "❌ Error: The following required GitHub Secrets are missing or empty:"
+            for secret in "${MISSING_SECRETS[@]}"; do
+              echo "  - $secret"
+            done
+            echo ""
+            echo "👉 To fix this:"
+            echo "1. Go to your GitHub repository -> Settings -> Secrets and variables -> Actions"
+            echo "2. Add each missing secret under 'Repository secrets'."
+            echo "   - PLAY_STORE_JSON_KEY: Google Play Console service account key JSON (raw or base64)"
+            echo "   - ANDROID_KEYSTORE_BASE64: Base64-encoded release keystore (.jks/.keystore)"
+            echo "   - KEYSTORE_PASSWORD: Password for the keystore"
+            echo "   - KEY_ALIAS: Key alias inside the keystore"
+            echo "   - KEY_PASSWORD: Password for the key"
+            exit 1
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -28,13 +65,24 @@ jobs:
 
       - name: Decode Google Service Account Key
         run: |
-          echo "${{ secrets.PLAY_STORE_JSON_KEY }}" | base64 --decode > fastlane/play-store-credentials.json
+          mkdir -p fastlane
+          RAW_KEY='${{ secrets.PLAY_STORE_JSON_KEY }}'
+          # Check if input is already raw JSON or base64 encoded
+          if echo "$RAW_KEY" | grep -q "^{"; then
+            echo "$RAW_KEY" > fastlane/play-store-credentials.json
+          else
+            echo "$RAW_KEY" | base64 --decode > fastlane/play-store-credentials.json
+          fi
+
+      - name: Decode Android Keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/release.keystore
 
       - name: Run Fastlane Internal Deploy
         run: |
           bundle exec fastlane deploy_internal
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
