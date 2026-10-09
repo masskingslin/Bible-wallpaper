@@ -1,0 +1,8 @@
+{
+  "name": "Bible Wallpapers",
+  "description": "Inspiring Christian and Bible scripture wallpapers with multilingual verses, customizable phone lock screen previews, high-definition downloads, and daily verse blessings.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
