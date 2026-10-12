@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { NEW_WALLPAPERS_EN, NEW_WALLPAPERS_TA } from './newScriptureVerses.js';
+import { CURATED_COLLECTIONS_EN, CURATED_COLLECTIONS_TA } from './curatedWallpapersData.js';
 
 export interface WallpaperItem {
   id: string;
@@ -8,15 +9,24 @@ export interface WallpaperItem {
   verseReference: string;
   language: string;
   category: string;
+  collection?: string;
   visualTheme: string;
   testament: 'Old' | 'New';
   isPremium: boolean;
   downloads?: number;
   tags?: string[];
   wallpaperQuote?: string;
+  caption?: string;
+  resolution?: string;
+  file?: string;
 }
 
 export const WALLPAPERS_MOCK: WallpaperItem[] = [
+  // ==========================================
+  // CURATED 4K UHD COLLECTIONS (English)
+  // ==========================================
+  ...CURATED_COLLECTIONS_EN,
+
   // ==========================================
   // NEW SCRIPTURE VERSES (English)
   // ==========================================
@@ -840,18 +850,30 @@ export const WALLPAPERS_MOCK: WallpaperItem[] = [
   },
 
   // ==========================================
+  // CURATED 4K UHD COLLECTIONS (Tamil)
+  // ==========================================
+  ...CURATED_COLLECTIONS_TA,
+
+  // ==========================================
   // NEW SCRIPTURE VERSES (Tamil)
   // ==========================================
   ...NEW_WALLPAPERS_TA
 ];
 
 // Offline Cache settings
-let autoChangerSettings = {
+let autoChangerSettings: any = {
   enabled: true,
   intervalMinutes: 60, // 1 hour auto rotation
   targetScreen: 'lockscreen',
   includedCategories: ['All'],
-  lastChangedTimestamp: Date.now()
+  lastChangedTimestamp: Date.now(),
+  batterySaver: {
+    enabled: true,
+    action: 'reduce',
+    lowBatteryThreshold: 20,
+    pauseWhenNotCharging: false,
+    reduceIntervalMultiplier: 3
+  }
 };
 
 export function handleWallpapersRequest(req: Request, res: Response) {
@@ -859,16 +881,23 @@ export function handleWallpapersRequest(req: Request, res: Response) {
 
   const language = (req.query.language as string) || 'en';
   const category = req.query.category as string;
+  const collection = req.query.collection as string;
   const visualTheme = req.query.visualTheme as string;
   const testament = req.query.testament as string;
+  const sort = req.query.sort as string;
   const search = (req.query.search as string || '').toLowerCase().trim();
   const page = parseInt(req.query.page as string || '1', 10);
-  const limit = parseInt(req.query.limit as string || '60', 10);
+  const limit = parseInt(req.query.limit as string || '250', 10);
 
   let filtered = WALLPAPERS_MOCK.filter(w => w.language === language);
 
   if (filtered.length === 0) {
     filtered = WALLPAPERS_MOCK.filter(w => w.language === 'en');
+  }
+
+  // Collection filtering
+  if (collection && collection !== 'All') {
+    filtered = filtered.filter(w => w.collection === collection);
   }
 
   // Flexible category matching across topics
@@ -903,6 +932,23 @@ export function handleWallpapersRequest(req: Request, res: Response) {
     );
   }
 
+  // Sorting: 'newest', 'downloads', 'reference'
+  if (sort === 'downloads') {
+    filtered.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+  } else if (sort === 'reference') {
+    filtered.sort((a, b) => a.verseReference.localeCompare(b.verseReference, undefined, { numeric: true }));
+  } else if (sort === 'newest') {
+    // Curated 4K sets and latest items first
+    filtered.sort((a, b) => {
+      // Prioritize curated collection items, then by ID descending
+      const aIsCurated = Boolean(a.collection);
+      const bIsCurated = Boolean(b.collection);
+      if (aIsCurated && !bIsCurated) return -1;
+      if (!aIsCurated && bIsCurated) return 1;
+      return b.id.localeCompare(a.id, undefined, { numeric: true });
+    });
+  }
+
   const startIndex = (page - 1) * limit;
   const paginated = filtered.slice(startIndex, startIndex + limit);
 
@@ -930,11 +976,12 @@ export function handleOfflinePackRequest(_req: Request, res: Response) {
 
 export function handleAutoChangeSettings(req: Request, res: Response) {
   if (req.method === 'POST') {
-    const { enabled, intervalMinutes, targetScreen, includedCategories } = req.body;
+    const { enabled, intervalMinutes, targetScreen, includedCategories, batterySaver } = req.body;
     if (typeof enabled === 'boolean') autoChangerSettings.enabled = enabled;
     if (typeof intervalMinutes === 'number') autoChangerSettings.intervalMinutes = intervalMinutes;
     if (targetScreen) autoChangerSettings.targetScreen = targetScreen;
     if (Array.isArray(includedCategories)) autoChangerSettings.includedCategories = includedCategories;
+    if (batterySaver) (autoChangerSettings as any).batterySaver = batterySaver;
     autoChangerSettings.lastChangedTimestamp = Date.now();
     return res.status(200).json({ success: true, settings: autoChangerSettings });
   }

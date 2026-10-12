@@ -1,25 +1,40 @@
 import { CustomizationSettings, Wallpaper } from '../types';
 
-export async function generateAndDownloadWallpaper(
+export interface RenderResult {
+  canvas: HTMLCanvasElement;
+  dataUrl: string;
+  blob: Blob;
+  width: number;
+  height: number;
+  sizeBytes: number;
+  is4K: boolean;
+}
+
+/**
+ * Renders the wallpaper with customization settings to a high-resolution canvas
+ */
+export async function renderWallpaperCanvas(
   wallpaper: Wallpaper,
   settings: CustomizationSettings
-): Promise<void> {
+): Promise<HTMLCanvasElement> {
   const canvas = document.createElement('canvas');
-  // Full HD vertical wallpaper resolution
-  const width = 1080;
-  const height = 1920;
+  const is4K = wallpaper.resolution === '2160x3840';
+  const scale = is4K ? 2 : 1;
+  const width = is4K ? 2160 : 1080;
+  const height = is4K ? 3840 : 1920;
   canvas.width = width;
   canvas.height = height;
 
   const ctx = canvas.getContext('2d');
-  if (!ctx) return;
+  if (!ctx) throw new Error('Could not get 2D context');
 
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
+
     img.onload = () => {
       try {
-        // Draw image covering 1080x1920
+        // Draw image covering resolution
         const hRatio = canvas.width / img.width;
         const vRatio = canvas.height / img.height;
         const ratio = Math.max(hRatio, vRatio);
@@ -120,11 +135,11 @@ export async function generateAndDownloadWallpaper(
           else if (settings.fontStyle === 'sans') fontName = "'Plus Jakarta Sans', 'Mukta Malar', sans-serif";
         }
 
-        let fontSize = 48;
-        if (settings.fontSize === 'sm') fontSize = 40;
-        else if (settings.fontSize === 'md') fontSize = 52;
-        else if (settings.fontSize === 'lg') fontSize = 64;
-        else if (settings.fontSize === 'xl') fontSize = 76;
+        let fontSize = 48 * scale;
+        if (settings.fontSize === 'sm') fontSize = 40 * scale;
+        else if (settings.fontSize === 'md') fontSize = 52 * scale;
+        else if (settings.fontSize === 'lg') fontSize = 64 * scale;
+        else if (settings.fontSize === 'xl') fontSize = 76 * scale;
 
         ctx.font = `${isItalic ? 'italic ' : ''}${fontSize}px ${fontName}`;
         ctx.textAlign = 'center';
@@ -138,9 +153,9 @@ export async function generateAndDownloadWallpaper(
         // Shadow
         if (settings.showShadow) {
           ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
-          ctx.shadowBlur = 18;
+          ctx.shadowBlur = 18 * scale;
           ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 4;
+          ctx.shadowOffsetY = 4 * scale;
         }
 
         // Text wrap helper
@@ -174,9 +189,9 @@ export async function generateAndDownloadWallpaper(
         // Draw optional inspirational quote
         if (wallpaper.wallpaperQuote) {
           ctx.save();
-          ctx.font = `600 ${Math.max(22, fontSize * 0.42)}px 'Cinzel', serif`;
+          ctx.font = `600 ${Math.max(22 * scale, fontSize * 0.42)}px 'Cinzel', serif`;
           ctx.fillStyle = settings.textColor === 'gold' ? '#fde047' : '#fef08a';
-          ctx.fillText(`✦ ${wallpaper.wallpaperQuote} ✦`, width / 2, startY - 40);
+          ctx.fillText(`✦ ${wallpaper.wallpaperQuote} ✦`, width / 2, startY - 40 * scale);
           ctx.restore();
         }
 
@@ -186,41 +201,97 @@ export async function generateAndDownloadWallpaper(
         });
 
         // Draw scripture reference
-        const refY = startY + lines.length * lineHeight + 36;
-        ctx.font = `600 ${Math.max(28, fontSize * 0.55)}px ${refFontName}`;
+        const refY = startY + lines.length * lineHeight + 36 * scale;
+        ctx.font = `600 ${Math.max(28 * scale, fontSize * 0.55)}px ${refFontName}`;
         ctx.fillStyle = settings.textColor === 'gold' ? '#facc15' : '#e0e7ff';
         ctx.fillText(`— ${wallpaper.verseReference} —`, width / 2, refY);
 
         // Watermark/Subtle attribution
-        ctx.font = "400 20px 'Plus Jakarta Sans', sans-serif";
+        ctx.font = `400 ${20 * scale}px 'Plus Jakarta Sans', sans-serif`;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.shadowBlur = 0;
-        ctx.fillText('Bible Wallpapers', width / 2, height - 60);
+        ctx.fillText('Bible Wallpapers', width / 2, height - 60 * scale);
 
-        // Trigger download
-        const dataUrl = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.download = `BibleWallpaper-${wallpaper.verseReference.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
-        link.href = dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        resolve();
+        resolve(canvas);
       } catch (err) {
         reject(err);
       }
     };
+
     img.onerror = () => {
-      // If cross-origin image fails on canvas, fallback to direct download
-      const link = document.createElement('a');
-      link.href = wallpaper.imageUrl;
-      link.target = '_blank';
-      link.download = `BibleWallpaper-${wallpaper.id}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      resolve();
+      reject(new Error('Failed to load wallpaper image for rendering'));
     };
+
     img.src = wallpaper.imageUrl;
   });
+}
+
+/**
+ * Exports the wallpaper as a dataUrl, blob, and dimensions for Preview modals
+ */
+export async function exportWallpaperRender(
+  wallpaper: Wallpaper,
+  settings: CustomizationSettings,
+  format: 'image/png' | 'image/jpeg' = 'image/png',
+  quality: number = 0.95
+): Promise<RenderResult> {
+  const canvas = await renderWallpaperCanvas(wallpaper, settings);
+  const dataUrl = canvas.toDataURL(format, quality);
+
+  const blob: Blob = await new Promise((resolve) => {
+    canvas.toBlob((b) => resolve(b || new Blob()), format, quality);
+  });
+
+  return {
+    canvas,
+    dataUrl,
+    blob,
+    width: canvas.width,
+    height: canvas.height,
+    sizeBytes: blob.size || Math.round(dataUrl.length * 0.75),
+    is4K: wallpaper.resolution === '2160x3840',
+  };
+}
+
+/**
+ * Downloads a rendered canvas to the user's filesystem
+ */
+export function downloadCanvas(
+  canvas: HTMLCanvasElement,
+  filename: string,
+  format: 'image/png' | 'image/jpeg' = 'image/png',
+  quality: number = 0.95
+): void {
+  const dataUrl = canvas.toDataURL(format, quality);
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = dataUrl;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/**
+ * Generates and immediately downloads the wallpaper (legacy + 1-click)
+ */
+export async function generateAndDownloadWallpaper(
+  wallpaper: Wallpaper,
+  settings: CustomizationSettings,
+  format: 'image/png' | 'image/jpeg' = 'image/png'
+): Promise<void> {
+  try {
+    const canvas = await renderWallpaperCanvas(wallpaper, settings);
+    const ext = format === 'image/jpeg' ? 'jpg' : 'png';
+    const filename = `BibleWallpaper-${wallpaper.verseReference.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`;
+    downloadCanvas(canvas, filename, format);
+  } catch {
+    // Direct fallback if canvas cross-origin fails
+    const link = document.createElement('a');
+    link.href = wallpaper.imageUrl;
+    link.target = '_blank';
+    link.download = `BibleWallpaper-${wallpaper.id}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 }

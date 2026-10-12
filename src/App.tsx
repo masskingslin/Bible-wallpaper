@@ -3,13 +3,20 @@ import {
   Search, Heart, Download, Crown, Sparkles, Globe, 
   Smartphone, Filter, BookOpen, ChevronDown, Check,
   RefreshCw, Bookmark, Share2, Star, Clock, Wifi, WifiOff,
-  Sliders, Settings2, Sun, Moon, CheckSquare, Square, FolderDown,
+  Sliders, Settings2, Sun, Moon, Sunrise, Sunset, CheckSquare, Square, FolderDown,
   Volume2, VolumeX, Play, Pause, ArrowRight, Zap, Hourglass, RotateCw,
-  Type, Shuffle, Flame
+  Type, Shuffle, Flame, ArrowUpDown, Battery, BatteryCharging,
+  BatteryWarning, BatteryLow, BatteryMedium, Gauge, Power
 } from 'lucide-react';
-import { Wallpaper, LanguageOption, AppThemeMode, FontThemeId, WallpaperFadeMode } from './types';
+import { 
+  Wallpaper, LanguageOption, AppThemeMode, ThemePreference, 
+  SolarThemeConfig, FontThemeId, WallpaperFadeMode, WallpaperSortOption,
+  CustomizationSettings
+} from './types';
 import { FONT_THEMES, WALLPAPER_FADE_OPTIONS, getFontTheme } from './utils/fontThemes';
 import { PhonePreviewModal } from './components/PhonePreviewModal';
+import { SharePreviewModal } from './components/SharePreviewModal';
+import { DownloadPreviewModal } from './components/DownloadPreviewModal';
 import { UpgradeModal } from './components/UpgradeModal';
 import { AutoChangerModal } from './components/AutoChangerModal';
 import { SettingsModal, SettingsTab } from './components/SettingsModal';
@@ -19,6 +26,7 @@ import { TopicsExplorerModal } from './components/TopicsExplorerModal';
 import { DailyVerseQuote } from './components/DailyVerseQuote';
 import { StreakData, getStreakData, recordScriptureInteraction } from './utils/streakUtils';
 import { ALL_BIBLE_TOPICS, VISUAL_THEMES_DIRECTORY } from './data/bibleTopics';
+import { CuratedCollectionsBar } from './components/CuratedCollectionsBar';
 import { shareWallpaper } from './utils/shareUtils';
 import { narrateScripture, stopScriptureNarration } from './utils/speechUtils';
 import { downloadWallpapersAsZip, BulkDownloadProgress } from './utils/bulkDownload';
@@ -30,6 +38,8 @@ import {
   saveAutoChangerConfig, 
   AutoChangerConfig 
 } from './utils/offlineStorage';
+import { useBatteryStatus } from './utils/useBatteryStatus';
+import { useSolarTheme } from './utils/solarTheme';
 
 const LANGUAGES: LanguageOption[] = [
   { code: 'en', displayName: 'English', flag: '🇺🇸' },
@@ -49,11 +59,20 @@ const VISUAL_THEMES = [
   ...VISUAL_THEMES_DIRECTORY.map((v) => v.name)
 ];
 
+const SORT_OPTIONS: { id: WallpaperSortOption; label: string; labelTamil: string; subtitle: string }[] = [
+  { id: 'newest', label: 'Newest', labelTamil: 'புதியவை', subtitle: 'Curated 4K & latest additions first' },
+  { id: 'downloads', label: 'Most Downloaded', labelTamil: 'அதிக பதிவிறக்கம்', subtitle: 'Community favorite wallpapers' },
+  { id: 'reference', label: 'Alphabetical by Verse Reference', labelTamil: 'வேத குறிப்பு அகரவரிசை', subtitle: 'A to Z by Book, Chapter & Verse' },
+];
+
 export function App() {
   const [selectedLanguage, setSelectedLanguage] = useState<string>('en');
+  const [selectedCollection, setSelectedCollection] = useState<string>('All');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedVisualTheme, setSelectedVisualTheme] = useState<string>('All Aesthetics');
   const [selectedTestament, setSelectedTestament] = useState<string>('All');
+  const [sortOption, setSortOption] = useState<WallpaperSortOption>('newest');
+  const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [wallpapers, setWallpapers] = useState<Wallpaper[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -92,26 +111,19 @@ export function App() {
     return map;
   }, [wallpapers]);
   
-  // Theme state: default dark vs warm paper light mode
-  const [themeMode, setThemeMode] = useState<AppThemeMode>(() => {
-    try {
-      const saved = localStorage.getItem('bible_wallpapers_theme_mode');
-      return (saved === 'light' || saved === 'dark') ? saved : 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('bible_wallpapers_theme_mode', themeMode);
-    if (themeMode === 'light') {
-      document.body.classList.add('bg-[#f8f5ee]', 'text-stone-900');
-      document.body.classList.remove('bg-stone-950', 'text-stone-100');
-    } else {
-      document.body.classList.add('bg-stone-950', 'text-stone-100');
-      document.body.classList.remove('bg-[#f8f5ee]', 'text-stone-900');
-    }
-  }, [themeMode]);
+  // Solar Theme Engine (Dark, Light, or Scheduled Sunrise/Sunset)
+  const solarTheme = useSolarTheme();
+  const { 
+    config: solarConfig, 
+    effectiveTheme: themeMode, 
+    isLight, 
+    nextTransitionText, 
+    sunriseFormatted, 
+    sunsetFormatted, 
+    updateConfig: updateSolarConfig, 
+    setThemePreference,
+    requestGeolocation 
+  } = solarTheme;
 
   // Active Fonts Theme state (customizable typography styling)
   const [fontTheme, setFontTheme] = useState<FontThemeId>(() => {
@@ -170,6 +182,7 @@ export function App() {
   const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
   const [isNetworkOffline, setIsNetworkOffline] = useState<boolean>(!navigator.onLine);
   const [autoConfig, setAutoConfig] = useState<AutoChangerConfig>(getAutoChangerConfig);
+  const batteryState = useBatteryStatus(autoConfig);
   const [currentLockscreenWallpaper, setCurrentLockscreenWallpaper] = useState<Wallpaper | null>(null);
   const [remainingTimeSeconds, setRemainingTimeSeconds] = useState<number>(3600);
   const [shareToast, setShareToast] = useState<string | null>(null);
@@ -182,7 +195,47 @@ export function App() {
   const [bulkProgress, setBulkProgress] = useState<BulkDownloadProgress | null>(null);
   const [upgradeReason, setUpgradeReason] = useState<string | undefined>(undefined);
 
-  // Smooth cross-fade transition handler when changing categories, visual themes, or filters
+  // Share & Download Preview Modal State
+  const [sharePreviewWallpaper, setSharePreviewWallpaper] = useState<Wallpaper | null>(null);
+  const [downloadPreviewWallpaper, setDownloadPreviewWallpaper] = useState<Wallpaper | null>(null);
+  const [downloadPreviewSettings, setDownloadPreviewSettings] = useState<CustomizationSettings | undefined>(undefined);
+
+  const handleOpenSharePreview = (wallpaper: Wallpaper) => {
+    triggerWebHaptic('selection');
+    setSharePreviewWallpaper(wallpaper);
+  };
+
+  const handleOpenDownloadPreview = (wallpaper: Wallpaper, customSettings?: CustomizationSettings) => {
+    triggerWebHaptic('selection');
+    setDownloadPreviewSettings(customSettings);
+    setDownloadPreviewWallpaper(wallpaper);
+  };
+
+  // Smooth cross-fade transition handler when changing collections, categories, visual themes, or filters
+  const handleCollectionChange = (collection: string) => {
+    if (collection === selectedCollection) return;
+    triggerWebHaptic('selection');
+    setIsFilterTransitioning(true);
+    setSelectedCollection(collection);
+    setTimeout(() => {
+      setIsFilterTransitioning(false);
+    }, 280);
+  };
+
+  const handleSortChange = (option: WallpaperSortOption) => {
+    if (option === sortOption) {
+      setSortDropdownOpen(false);
+      return;
+    }
+    triggerWebHaptic('selection');
+    setIsFilterTransitioning(true);
+    setSortOption(option);
+    setSortDropdownOpen(false);
+    setTimeout(() => {
+      setIsFilterTransitioning(false);
+    }, 280);
+  };
+
   const handleCategoryChange = (category: string) => {
     if (category === selectedCategory) return;
     triggerWebHaptic('selection');
@@ -391,10 +444,13 @@ export function App() {
     try {
       const params = new URLSearchParams({
         language: selectedLanguage,
+        limit: '250',
       });
+      if (selectedCollection !== 'All') params.append('collection', selectedCollection);
       if (selectedCategory !== 'All') params.append('category', selectedCategory);
       if (selectedVisualTheme !== 'All Aesthetics') params.append('visualTheme', selectedVisualTheme);
       if (selectedTestament !== 'All') params.append('testament', selectedTestament);
+      if (sortOption !== 'newest') params.append('sort', sortOption);
       if (searchQuery.trim()) params.append('search', searchQuery.trim());
 
       const res = await fetch(`/api/wallpapers?${params.toString()}`);
@@ -425,13 +481,22 @@ export function App() {
 
   useEffect(() => {
     fetchWallpapers();
-  }, [selectedLanguage, selectedCategory, selectedVisualTheme, selectedTestament, isOfflineMode, isNetworkOffline]);
+  }, [selectedLanguage, selectedCollection, selectedCategory, selectedVisualTheme, selectedTestament, sortOption, isOfflineMode, isNetworkOffline]);
 
-  // 1-HOUR AUTOMATIC LOCK SCREEN ROTATION ENGINE
+  // ADAPTIVE AUTOMATIC LOCK SCREEN ROTATION ENGINE (POWER & BATTERY AWARE)
   useEffect(() => {
     if (!autoConfig.enabled || wallpapers.length === 0) return;
 
-    const intervalMs = autoConfig.intervalMinutes * 60 * 1000;
+    // If battery saver paused rotation due to low battery or unplugged state, halt interval
+    if (batteryState.effectiveAction === 'paused') {
+      return;
+    }
+
+    const effectiveMinutes = batteryState.effectiveAction === 'reduced'
+      ? batteryState.effectiveIntervalMinutes
+      : (autoConfig.intervalMinutes || 60);
+    const intervalMs = effectiveMinutes * 60 * 1000;
+
     const intervalTimer = setInterval(() => {
       const now = Date.now();
       const elapsed = (now - autoConfig.lastChanged) % intervalMs;
@@ -454,7 +519,7 @@ export function App() {
     }, 1000);
 
     return () => clearInterval(intervalTimer);
-  }, [autoConfig, wallpapers]);
+  }, [autoConfig, wallpapers, batteryState.effectiveAction, batteryState.effectiveIntervalMinutes]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -462,11 +527,31 @@ export function App() {
   };
 
   const displayedWallpapers = useMemo(() => {
-    if (filterFavoritesOnly) {
-      return wallpapers.filter((w) => favorites.includes(w.id));
+    let result = [...wallpapers];
+    if (selectedCollection !== 'All') {
+      result = result.filter((w) => w.collection === selectedCollection);
     }
-    return wallpapers;
-  }, [wallpapers, filterFavoritesOnly, favorites]);
+    if (filterFavoritesOnly) {
+      result = result.filter((w) => favorites.includes(w.id));
+    }
+
+    // Apply sorting
+    if (sortOption === 'downloads') {
+      result.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+    } else if (sortOption === 'reference') {
+      result.sort((a, b) => a.verseReference.localeCompare(b.verseReference, undefined, { numeric: true }));
+    } else if (sortOption === 'newest') {
+      result.sort((a, b) => {
+        const aCurated = Boolean(a.collection);
+        const bCurated = Boolean(b.collection);
+        if (aCurated && !bCurated) return -1;
+        if (!aCurated && bCurated) return 1;
+        return b.id.localeCompare(a.id, undefined, { numeric: true });
+      });
+    }
+
+    return result;
+  }, [wallpapers, selectedCollection, filterFavoritesOnly, favorites, sortOption]);
 
   const featuredWallpaper = wallpapers.find((w) => !w.isPremium) || wallpapers[0];
   const currentLangObj = LANGUAGES.find((l) => l.code === selectedLanguage) || LANGUAGES[0];
@@ -487,6 +572,9 @@ export function App() {
 
   // Exact countdown timer formatting (HH:MM:SS or MM:SS)
   const formatCountdownTimer = (secs: number) => {
+    if (batteryState.effectiveAction === 'paused') {
+      return 'Paused by Battery Saver';
+    }
     const hours = Math.floor(secs / 3600);
     const mins = Math.floor((secs % 3600) / 60);
     const s = secs % 60;
@@ -509,7 +597,10 @@ export function App() {
     const newConfig = { ...autoConfig, lastChanged: Date.now() };
     setAutoConfig(newConfig);
     saveAutoChangerConfig(newConfig);
-    setRemainingTimeSeconds(autoConfig.intervalMinutes * 60);
+    const currentActiveMins = batteryState.effectiveAction === 'reduced'
+      ? batteryState.effectiveIntervalMinutes
+      : (autoConfig.intervalMinutes || 60);
+    setRemainingTimeSeconds(currentActiveMins * 60);
   };
 
   // Quick toggle auto rotation active/paused
@@ -523,15 +614,22 @@ export function App() {
     setAutoConfig(newConfig);
     saveAutoChangerConfig(newConfig);
     if (!autoConfig.enabled) {
-      setRemainingTimeSeconds(autoConfig.intervalMinutes * 60);
+      const currentActiveMins = batteryState.effectiveAction === 'reduced'
+        ? batteryState.effectiveIntervalMinutes
+        : (autoConfig.intervalMinutes || 60);
+      setRemainingTimeSeconds(currentActiveMins * 60);
     }
   };
 
-  const totalIntervalSeconds = Math.max(60, (autoConfig.intervalMinutes || 60) * 60);
-  const elapsedIntervalSeconds = Math.max(0, totalIntervalSeconds - remainingTimeSeconds);
-  const rotationProgressPercent = Math.min(100, Math.max(0, (elapsedIntervalSeconds / totalIntervalSeconds) * 100));
+  const activeIntervalMinutes = batteryState.effectiveAction === 'reduced'
+    ? batteryState.effectiveIntervalMinutes
+    : (autoConfig.intervalMinutes || 60);
 
-  const isLight = themeMode === 'light';
+  const totalIntervalSeconds = Math.max(60, activeIntervalMinutes * 60);
+  const elapsedIntervalSeconds = Math.max(0, totalIntervalSeconds - remainingTimeSeconds);
+  const rotationProgressPercent = batteryState.effectiveAction === 'paused'
+    ? 0
+    : Math.min(100, Math.max(0, (elapsedIntervalSeconds / totalIntervalSeconds) * 100));
 
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-300 ${
@@ -570,28 +668,62 @@ export function App() {
           {/* Right Controls: Theme Toggle, Auto-Changer, Offline Status, Language, Bookmarks, VIP */}
           <div className="flex items-center gap-2 sm:gap-3">
             
-            {/* Theme Toggle Button (Dark Mode <-> Warm Paper) */}
-            <button
-              onClick={() => setThemeMode(isLight ? 'dark' : 'light')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition ${
-                isLight
-                  ? 'bg-[#ece3d2] hover:bg-[#e4dac6] border-[#d8ccb6] text-amber-950 shadow-xs'
-                  : 'bg-stone-900 hover:bg-stone-850 border-stone-800 text-stone-200'
-              }`}
-              title={isLight ? "Switch to Dark Mode" : "Switch to Warm Paper (Light Mode)"}
-            >
-              {isLight ? (
-                <>
-                  <Sun className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="hidden md:inline">Warm Paper</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden md:inline">Dark</span>
-                </>
-              )}
-            </button>
+            {/* Theme Toggle Button (Dark <-> Warm Paper <-> Auto Solar Sunrise/Sunset) */}
+            <div className="flex items-center">
+              <button
+                onClick={() => {
+                  triggerWebHaptic('selection');
+                  if (solarConfig.mode === 'dark') {
+                    setThemePreference('light');
+                  } else if (solarConfig.mode === 'light') {
+                    setThemePreference('auto_sun');
+                  } else {
+                    setThemePreference('dark');
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition ${
+                  isLight
+                    ? 'bg-[#ece3d2] hover:bg-[#e4dac6] border-[#d8ccb6] text-amber-950 shadow-xs'
+                    : 'bg-stone-900 hover:bg-stone-850 border-stone-800 text-stone-200'
+                }`}
+                title={`Theme Mode: ${
+                  solarConfig.mode === 'auto_sun'
+                    ? `Auto Solar Schedule (${isLight ? 'Daytime Warm Paper' : 'Nighttime Dark'}) — Click to cycle`
+                    : isLight
+                      ? 'Warm Paper Light — Click to cycle'
+                      : 'Dark Mode — Click to cycle'
+                }`}
+              >
+                {solarConfig.mode === 'auto_sun' ? (
+                  <>
+                    <Sunrise className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0" />
+                    <span className="hidden md:inline">Auto ({isLight ? 'Day' : 'Night'})</span>
+                  </>
+                ) : isLight ? (
+                  <>
+                    <Sun className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span className="hidden md:inline">Warm Paper</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="hidden md:inline">Dark</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => openSettings('theme')}
+                className={`ml-1 p-2 rounded-xl text-xs transition border ${
+                  isLight
+                    ? 'bg-[#ece3d2] hover:bg-[#e4dac6] border-[#d8ccb6] text-stone-700'
+                    : 'bg-stone-900 hover:bg-stone-850 border-stone-800 text-stone-400 hover:text-stone-200'
+                }`}
+                title="Configure Sunrise & Sunset Schedule in Settings"
+              >
+                <Sliders className="w-3.5 h-3.5 text-amber-500" />
+              </button>
+            </div>
 
             {/* 1-Hour Lock Screen Auto-Changer Quick Button */}
             <button
@@ -930,6 +1062,8 @@ export function App() {
           fontTheme={fontTheme}
           wallpaperFade={wallpaperFade}
           onInteract={handleScriptureInteracted}
+          onOpenSharePreview={handleOpenSharePreview}
+          onOpenDownloadPreview={handleOpenDownloadPreview}
         />
 
         {/* Daily Scripture Reading Streak Tracker Module */}
@@ -1043,13 +1177,44 @@ export function App() {
                       ? 'bg-amber-600/10 text-amber-900 border-amber-600/20' 
                       : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
                   }`}>
-                    Every {autoConfig.intervalMinutes}m ({autoConfig.intervalMinutes === 60 ? '1 Hour' : `${autoConfig.intervalMinutes} Mins`})
+                    {batteryState.effectiveAction === 'reduced'
+                      ? `Cadence: ${activeIntervalMinutes}m (Extended for Battery Saver)`
+                      : batteryState.effectiveAction === 'paused'
+                        ? 'Cadence: Paused by Battery Saver'
+                        : `Every ${autoConfig.intervalMinutes}m (${autoConfig.intervalMinutes === 60 ? '1 Hour' : `${autoConfig.intervalMinutes} Mins`})`}
                   </span>
+
+                  {/* Battery Saver Status Chip */}
+                  <button
+                    type="button"
+                    onClick={() => openSettings('battery')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border transition cursor-pointer hover:opacity-90 ${
+                      batteryState.isSaverTriggered
+                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                        : autoConfig.batterySaver?.enabled
+                          ? isLight
+                            ? 'bg-emerald-600/10 text-emerald-800 border-emerald-600/25'
+                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : isLight
+                            ? 'bg-stone-200 text-stone-600 border-stone-300'
+                            : 'bg-stone-800 text-stone-400 border-stone-700'
+                    }`}
+                    title="Click to view and configure Battery Saver Mode in Settings"
+                  >
+                    {batteryState.batteryInfo.charging ? (
+                      <BatteryCharging className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    ) : batteryState.batteryInfo.level <= 20 ? (
+                      <BatteryLow className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    ) : (
+                      <BatteryMedium className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    )}
+                    <span>{batteryState.statusBadge.label}</span>
+                  </button>
                 </div>
 
                 {/* Digital Live Countdown Timer Badge */}
                 <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-2xl border font-mono text-xs font-bold self-start sm:self-auto shadow-xs ${
-                  autoConfig.enabled
+                  autoConfig.enabled && batteryState.effectiveAction !== 'paused'
                     ? isLight
                       ? 'bg-amber-600/10 border-amber-600/30 text-amber-950'
                       : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
@@ -1057,10 +1222,12 @@ export function App() {
                       ? 'bg-stone-200 border-stone-300 text-stone-600'
                       : 'bg-stone-800 border-stone-700 text-stone-400'
                 }`}>
-                  <Clock className={`w-3.5 h-3.5 ${autoConfig.enabled ? 'text-amber-500 animate-spin [animation-duration:10s]' : 'text-stone-400'}`} />
+                  <Clock className={`w-3.5 h-3.5 ${autoConfig.enabled && batteryState.effectiveAction !== 'paused' ? 'text-amber-500 animate-spin [animation-duration:10s]' : 'text-stone-400'}`} />
                   <span>
                     {autoConfig.enabled 
-                      ? `Next rotation in: ${formatCountdownTimer(remainingTimeSeconds)}` 
+                      ? batteryState.effectiveAction === 'paused'
+                        ? `Rotation Paused (Battery ${batteryState.batteryInfo.level}%)`
+                        : `Next rotation in: ${formatCountdownTimer(remainingTimeSeconds)}` 
                       : 'Rotation paused'}
                   </span>
                 </div>
@@ -1275,6 +1442,15 @@ export function App() {
           );
         })()}
 
+        {/* Curated 4K Scripture Collections (5 Collections x 30 Wallpapers = 150 Dual Language Wallpapers) */}
+        <CuratedCollectionsBar
+          selectedCollection={selectedCollection}
+          onSelectCollection={handleCollectionChange}
+          isLight={isLight}
+          language={selectedLanguage}
+          totalCollectionCount={150}
+        />
+
         {/* Scripture Topics & Visual Themes Filters */}
         <div className="space-y-2.5">
           {/* Scripture Topics Filter */}
@@ -1462,8 +1638,77 @@ export function App() {
               )}
             </div>
 
-            {/* Bulk Download & Selection Action Bar */}
-            <div className="flex items-center gap-2">
+            {/* Sorting & Bulk Action Bar */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Sorting Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition flex items-center gap-1.5 shadow-xs ${
+                    isLight
+                      ? 'bg-[#f4eee2] hover:bg-[#eae2d2] border-[#ded4c3] text-stone-850'
+                      : 'bg-stone-900 hover:bg-stone-850 border-stone-800 text-stone-200'
+                  }`}
+                  title="Order wallpapers by Newest, Most Downloaded, or Alphabetical"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span className="hidden sm:inline text-stone-400 font-normal">Order:</span>
+                  <span className="font-semibold">
+                    {selectedLanguage === 'ta'
+                      ? SORT_OPTIONS.find((s) => s.id === sortOption)?.labelTamil
+                      : SORT_OPTIONS.find((s) => s.id === sortOption)?.label}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                </button>
+
+                {sortDropdownOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setSortDropdownOpen(false)} 
+                    />
+                    <div className={`absolute right-0 mt-2 w-64 border rounded-2xl shadow-2xl py-1.5 z-50 animate-fade-in ${
+                      isLight ? 'bg-[#fbf7ee] border-[#dfd5c3]' : 'bg-stone-900 border-stone-800'
+                    }`}>
+                      <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b flex items-center justify-between ${
+                        isLight ? 'text-stone-500 border-[#e5dcce]' : 'text-stone-400 border-stone-800'
+                      }`}>
+                        <span>{selectedLanguage === 'ta' ? 'வரிசைப்படுத்துதல்' : 'Order Wallpapers'}</span>
+                        <span className="text-[10px] text-amber-500 font-mono">3 options</span>
+                      </div>
+                      <div className="py-1">
+                        {SORT_OPTIONS.map((opt) => {
+                          const isSelected = sortOption === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => handleSortChange(opt.id)}
+                              className={`w-full px-3 py-2 text-xs flex flex-col text-left transition ${
+                                isSelected
+                                  ? (isLight ? 'bg-amber-500/15 text-amber-950 font-bold' : 'bg-amber-600/20 text-amber-300 font-bold')
+                                  : (isLight ? 'hover:bg-[#eee5d4] text-stone-800' : 'hover:bg-stone-800/80 text-stone-200')
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span className="font-semibold">
+                                  {selectedLanguage === 'ta' ? opt.labelTamil : opt.label}
+                                </span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                              </div>
+                              <span className={`text-[10px] mt-0.5 ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+                                {opt.subtitle}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
               {selectionMode ? (
                 <>
                   <button
@@ -1639,6 +1884,16 @@ export function App() {
                         <span className="px-2.5 py-0.5 text-[10px] font-semibold bg-black/60 backdrop-blur-md rounded-full text-stone-200 border border-white/10 uppercase tracking-wider">
                           {wallpaper.category}
                         </span>
+                        {wallpaper.collection && (
+                          <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/25 backdrop-blur-md rounded-full text-emerald-300 border border-emerald-500/40">
+                            {wallpaper.collection.replace(/_/g, ' ')}
+                          </span>
+                        )}
+                        {wallpaper.resolution === '2160x3840' && (
+                          <span className="px-2 py-0.5 text-[9px] font-mono font-bold bg-amber-500/25 backdrop-blur-md rounded-full text-amber-300 border border-amber-500/40">
+                            4K UHD
+                          </span>
+                        )}
                         {wallpaper.visualTheme && (
                           <span className="hidden sm:inline-block px-2 py-0.5 text-[9px] font-medium bg-amber-500/20 backdrop-blur-md rounded-full text-amber-300 border border-amber-500/30">
                             {wallpaper.visualTheme}
@@ -1660,13 +1915,13 @@ export function App() {
                           </span>
                         )}
                         <button
-                          onClick={() => handleShareWallpaper(wallpaper)}
+                          onClick={() => handleOpenSharePreview(wallpaper)}
                           className={`w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md border transition ${
                             sharedWallpaperId === wallpaper.id
                               ? 'bg-emerald-500/40 border-emerald-500 text-emerald-300'
-                              : 'bg-black/50 border-white/10 text-white/80 hover:text-white hover:bg-black/80'
+                              : 'bg-black/50 border-white/10 text-white/80 hover:text-indigo-300 hover:bg-black/80'
                           }`}
-                          title="Share wallpaper & scripture"
+                          title="Share Preview & Social Cards"
                         >
                           {sharedWallpaperId === wallpaper.id ? (
                             <Check className="w-3.5 h-3.5 text-emerald-300" />
@@ -1710,7 +1965,7 @@ export function App() {
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2">
+                      <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-1.5 sm:gap-2">
                         <button
                           onClick={() => {
                             stopScriptureNarration();
@@ -1744,19 +1999,19 @@ export function App() {
                         </button>
 
                         <button
-                          onClick={() => handleShareWallpaper(wallpaper)}
-                          className={`p-2 rounded-xl border transition ${
-                            sharedWallpaperId === wallpaper.id
-                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
-                              : 'bg-stone-850 hover:bg-stone-800 border-stone-700 text-stone-300 hover:text-amber-400'
-                          }`}
-                          title="Share to Social Media"
+                          onClick={() => handleOpenDownloadPreview(wallpaper)}
+                          className="p-2 rounded-xl border border-stone-700 bg-stone-850 hover:bg-stone-800 text-stone-300 hover:text-amber-400 transition"
+                          title="Download Preview & Format Options"
                         >
-                          {sharedWallpaperId === wallpaper.id ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <Share2 className="w-3.5 h-3.5" />
-                          )}
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenSharePreview(wallpaper)}
+                          className="p-2 rounded-xl border border-stone-700 bg-stone-850 hover:bg-stone-800 text-stone-300 hover:text-indigo-400 transition"
+                          title="Share Preview & Social Media Cards"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
                         </button>
 
                         <button
@@ -1849,8 +2104,44 @@ export function App() {
             setPreviewingWallpaper(null);
             setIsUpgradeOpen(true);
           }}
+          onOpenSharePreview={handleOpenSharePreview}
+          onOpenDownloadPreview={handleOpenDownloadPreview}
         />
       )}
+
+      {/* Share Preview Modal (Visual Social Card, Custom Quote, WhatsApp/Instagram/1-Click Share) */}
+      <SharePreviewModal
+        isOpen={!!sharePreviewWallpaper}
+        onClose={() => setSharePreviewWallpaper(null)}
+        wallpaper={sharePreviewWallpaper}
+        isLight={isLight}
+        onOpenDownloadPreview={(w) => {
+          setSharePreviewWallpaper(null);
+          handleOpenDownloadPreview(w);
+        }}
+      />
+
+      {/* Download Preview Modal (Render Canvas, Technical Specs, Format Picker, Zoom & Copy) */}
+      <DownloadPreviewModal
+        isOpen={!!downloadPreviewWallpaper}
+        onClose={() => {
+          setDownloadPreviewWallpaper(null);
+          setDownloadPreviewSettings(undefined);
+        }}
+        wallpaper={downloadPreviewWallpaper}
+        settings={downloadPreviewSettings}
+        isLight={isLight}
+        isPremiumUser={isPremiumUser}
+        onOpenUpgradeModal={() => {
+          setDownloadPreviewWallpaper(null);
+          setUpgradeReason(`VIP Gold Scripture Wallpaper "${downloadPreviewWallpaper?.verseReference}" is an exclusive privilege.`);
+          setIsUpgradeOpen(true);
+        }}
+        onOpenSharePreview={(w) => {
+          setDownloadPreviewWallpaper(null);
+          handleOpenSharePreview(w);
+        }}
+      />
 
       {/* VIP Upgrade Simulator */}
       <UpgradeModal
@@ -1883,7 +2174,7 @@ export function App() {
         wallpaperCountByTopic={wallpaperCountByTopic}
       />
 
-      {/* Settings & Preferences Modal (Haptic Feedback, Auto-Changer, Offline Storage) */}
+      {/* Settings & Preferences Modal (Solar Theme Schedule, Auto-Changer, Battery Saver, Haptics, Offline Storage) */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -1894,6 +2185,11 @@ export function App() {
         isOfflineMode={isOfflineMode}
         onToggleOfflineMode={(offline) => setIsOfflineMode(offline)}
         isLight={isLight}
+        autoConfig={autoConfig}
+        onUpdateAutoConfig={(cfg) => setAutoConfig(cfg)}
+        solarConfig={solarConfig}
+        onUpdateSolarConfig={updateSolarConfig}
+        onRequestGeolocation={requestGeolocation}
       />
     </div>
   );

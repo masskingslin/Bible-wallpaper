@@ -28,6 +28,8 @@ interface PhonePreviewModalProps {
   onNavigateWallpaper?: (wallpaper: Wallpaper) => void;
   fontTheme?: FontThemeId;
   onFontThemeChange?: (themeId: FontThemeId) => void;
+  onOpenSharePreview?: (wallpaper: Wallpaper) => void;
+  onOpenDownloadPreview?: (wallpaper: Wallpaper, settings?: CustomizationSettings) => void;
 }
 
 export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
@@ -41,6 +43,8 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
   onNavigateWallpaper,
   fontTheme = 'cathedral',
   onFontThemeChange,
+  onOpenSharePreview,
+  onOpenDownloadPreview,
 }) => {
   const [mode, setMode] = useState<PreviewMode>('lockscreen');
   const [copied, setCopied] = useState(false);
@@ -557,10 +561,20 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
             {/* Header info */}
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                   <span className="px-2.5 py-0.5 text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full">
                     {wallpaper.category}
                   </span>
+                  {wallpaper.collection && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full">
+                      {wallpaper.collection.replace(/_/g, ' ')}
+                    </span>
+                  )}
+                  {wallpaper.resolution && (
+                    <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-full">
+                      {wallpaper.resolution} 4K
+                    </span>
+                  )}
                   {wallpaper.isPremium && (
                     <span className="flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold bg-gradient-to-r from-amber-500 to-yellow-400 text-stone-950 rounded-full">
                       <Crown className="w-3 h-3 fill-current" />
@@ -571,6 +585,11 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
                 <h2 className="text-xl font-bold text-white font-cinzel">
                   {wallpaper.verseReference}
                 </h2>
+                {wallpaper.wallpaperQuote && (
+                  <p className="text-xs italic text-amber-300/90 font-medium mt-0.5">
+                    ✦ "{wallpaper.wallpaperQuote}" ✦
+                  </p>
+                )}
               </div>
 
               {/* Share, Audio & Favorite Actions */}
@@ -600,6 +619,20 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
                   </button>
                 )}
 
+                {onOpenSharePreview && (
+                  <button
+                    onClick={() => {
+                      triggerWebHaptic('selection');
+                      onOpenSharePreview(wallpaper);
+                    }}
+                    className="p-2.5 rounded-xl border border-stone-700 bg-stone-850 hover:bg-stone-750 text-indigo-300 hover:text-indigo-200 transition flex items-center gap-1.5 text-xs font-semibold shadow-xs"
+                    title="Open Share Preview card for social media"
+                  >
+                    <Share2 className="w-4 h-4 text-indigo-400" />
+                    <span className="hidden sm:inline">Share Preview</span>
+                  </button>
+                )}
+
                 <button
                   onClick={handleShare}
                   className={`p-2.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold ${
@@ -607,7 +640,7 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
                       ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                       : 'bg-stone-800 border-stone-700 text-stone-300 hover:text-white'
                   }`}
-                  title="Share scripture & wallpaper to social media"
+                  title="Quick share scripture & wallpaper to social media"
                 >
                   {shared ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4 text-amber-400" />}
                   <span className="hidden sm:inline">{shared ? 'Shared!' : 'Share'}</span>
@@ -990,23 +1023,49 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
                 Unlock VIP Wallpaper
               </button>
             ) : (
-              <button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="w-full py-3.5 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-600/30 transition hover:scale-[1.01]"
-              >
-                {downloading ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4" />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="flex-1 py-3.5 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-600/30 transition hover:scale-[1.01]"
+                >
+                  {downloading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span>
+                    {downloading 
+                      ? 'Rendering Wallpaper...' 
+                      : wallpaper.resolution === '2160x3840'
+                        ? 'Download 4K UHD'
+                        : 'Download Full HD'
+                    }
+                  </span>
+                </button>
+
+                {onOpenDownloadPreview && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerWebHaptic('selection');
+                      onOpenDownloadPreview(wallpaper, settings);
+                    }}
+                    className="py-3.5 px-4 rounded-2xl bg-stone-800 hover:bg-stone-750 border border-stone-700 text-amber-300 font-bold text-sm flex items-center justify-center gap-2 shadow transition hover:scale-[1.01]"
+                    title="Inspect canvas render, format options (PNG/JPG), and preview before download"
+                  >
+                    <Layers className="w-4 h-4 text-amber-400" />
+                    <span>Download Preview</span>
+                  </button>
                 )}
-                <span>{downloading ? 'Rendering HD Wallpaper...' : 'Download HD Phone Wallpaper (1080×1920)'}</span>
-              </button>
+              </div>
             )}
 
             <div className="flex items-center justify-between text-[11px] text-stone-400 px-1">
-              <span>9:16 Portrait Aspect Ratio</span>
-              <span>Full HD Resolution</span>
+              <span>9:16 Portrait Lock Screen</span>
+              <span className="font-mono text-amber-400 font-semibold">
+                {wallpaper.resolution === '2160x3840' ? '2160×3840 4K Ultra HD' : '1080×1920 Full HD'}
+              </span>
             </div>
           </div>
         </div>

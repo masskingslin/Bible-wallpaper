@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, Clock, Smartphone, Crown, Share2, 
   Copy, Check, RefreshCw, Zap, Bookmark, Heart,
-  Volume2, VolumeX
+  Volume2, VolumeX, Download, Layers
 } from 'lucide-react';
 import { Wallpaper, FontThemeId, WallpaperFadeMode } from '../types';
 import { getFontTheme } from '../utils/fontThemes';
@@ -21,6 +21,8 @@ interface DailyVerseBannerProps {
   fontTheme?: FontThemeId;
   wallpaperFade?: WallpaperFadeMode;
   onInteract?: () => void;
+  onOpenSharePreview?: (wallpaper: Wallpaper) => void;
+  onOpenDownloadPreview?: (wallpaper: Wallpaper) => void;
 }
 
 export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
@@ -35,6 +37,8 @@ export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
   fontTheme = 'cathedral',
   wallpaperFade = 'soft',
   onInteract,
+  onOpenSharePreview,
+  onOpenDownloadPreview,
 }) => {
   const [dailyVerse, setDailyVerse] = useState<Wallpaper | null>(null);
   const [loading, setLoading] = useState(true);
@@ -353,19 +357,40 @@ export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
             <span className="hidden sm:inline">Set Lock</span>
           </button>
 
-          {/* Share */}
+          {/* Download Preview */}
+          {dailyVerse && onOpenDownloadPreview && (
+            <button
+              onClick={() => onOpenDownloadPreview(dailyVerse)}
+              className={`p-2.5 rounded-xl text-xs font-semibold flex items-center justify-center transition border ${
+                isLight
+                  ? 'bg-[#ece4d4] hover:bg-[#e4dac6] border-[#d8ccb6] text-amber-950'
+                  : 'bg-stone-850 hover:bg-stone-800 border-stone-700 text-amber-400 hover:text-amber-300'
+              }`}
+              title="Download Preview & Format Options"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Share Preview / Share */}
           <button
-            onClick={handleShare}
+            onClick={() => {
+              if (dailyVerse && onOpenSharePreview) {
+                onOpenSharePreview(dailyVerse);
+              } else {
+                handleShare();
+              }
+            }}
             className={`p-2.5 rounded-xl text-xs font-semibold flex items-center justify-center transition border ${
               shared
                 ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
                 : isLight
-                  ? 'bg-[#ece4d4] hover:bg-[#e4dac6] border-[#d8ccb6] text-stone-800'
-                  : 'bg-stone-850 hover:bg-stone-800 border-stone-700 text-stone-300'
+                  ? 'bg-[#ece4d4] hover:bg-[#e4dac6] border-[#d8ccb6] text-stone-800 hover:text-indigo-600'
+                  : 'bg-stone-850 hover:bg-stone-800 border-stone-700 text-stone-300 hover:text-indigo-300'
             }`}
-            title="Share verse to social media"
+            title="Share Preview & Social Cards"
           >
-            {shared ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5 text-amber-500" />}
+            {shared ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5 text-indigo-400" />}
           </button>
 
           {/* Favorite */}

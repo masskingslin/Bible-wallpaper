@@ -11,18 +11,24 @@ import java.util.concurrent.TimeUnit
 object AutoWallpaperScheduler {
 
     /**
-     * Schedules automatic 1-hour rotation of the lock screen wallpaper.
-     * Uses WorkManager PeriodicWorkRequestBuilder with 1-hour interval.
+     * Schedules automatic rotation of the lock screen wallpaper.
+     * Uses WorkManager PeriodicWorkRequestBuilder with battery constraints and adaptive cadence.
      */
-    fun scheduleHourlyLockScreenChange(context: Context) {
+    fun scheduleHourlyLockScreenChange(
+        context: Context,
+        intervalHours: Long = 1,
+        requiresCharging: Boolean = false,
+        requiresBatteryNotLow: Boolean = true
+    ) {
         val constraints = Constraints.Builder()
-            .setRequiresBatteryNotLow(true)
+            .setRequiresBatteryNotLow(requiresBatteryNotLow)
+            .setRequiresCharging(requiresCharging)
             .build()
 
-        // 1 hour periodic interval
+        // Adaptive periodic interval with flex interval for system power efficiency
         val hourlyWorkRequest = PeriodicWorkRequestBuilder<AutoWallpaperWorker>(
-            1, TimeUnit.HOURS,
-            15, TimeUnit.MINUTES // Flex interval for system power efficiency
+            intervalHours, TimeUnit.HOURS,
+            15, TimeUnit.MINUTES
         )
             .setConstraints(constraints)
             .addTag("auto_lockscreen_wallpaper")

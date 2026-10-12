@@ -5,12 +5,16 @@ export interface Wallpaper {
   verseReference: string;
   language: string;
   category: string;
+  collection?: string;
   visualTheme?: string;
   testament?: 'Old' | 'New';
   isPremium: boolean;
   downloads?: number;
   tags?: string[];
   wallpaperQuote?: string;
+  caption?: string;
+  resolution?: string;
+  file?: string;
   sermonExcerpt?: string;
 }
 
@@ -35,8 +39,26 @@ export type FontStyle = 'playfair' | 'cinzel' | 'script' | 'sans';
 export type TextPosition = 'top' | 'center' | 'bottom';
 export type TextColor = 'white' | 'ivory' | 'gold';
 export type AppThemeMode = 'dark' | 'light';
+export type ThemePreference = 'dark' | 'light' | 'auto_sun';
+
+export interface SolarThemeConfig {
+  mode: ThemePreference; // 'dark' | 'light' | 'auto_sun'
+  useGeolocation: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  locationName: string;
+  customScheduleEnabled: boolean;
+  customSunrise: string; // "06:30"
+  customSunset: string; // "18:45"
+  manualSimulation?: {
+    active: boolean;
+    isDaytime: boolean;
+  };
+}
+
 export type ImageFilter = 'none' | 'grayscale' | 'sepia';
 export type WallpaperFadeMode = 'none' | 'soft' | 'deep' | 'dreamy';
+export type WallpaperSortOption = 'newest' | 'downloads' | 'reference';
 
 export type FontThemeId = 'cathedral' | 'sacred_script' | 'heritage_serif' | 'modern_clarity' | 'golden_gothic';
 
