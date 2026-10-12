@@ -7,27 +7,34 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+val buildVersionCode = (System.getenv("BUILD_NUMBER") ?: System.getenv("GITHUB_RUN_NUMBER"))?.toIntOrNull() ?: 1
+val buildVersionName = System.getenv("VERSION_NAME") ?: "1.0.$buildVersionCode"
+
 android {
-    namespace = "com.example.biblewallpapers"
-    compileSdk = 36
+    namespace = "com.DK.biblewallpapers"
+    compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.biblewallpapers"
+        applicationId = "com.DK.biblewallpapers"
         minSdk = 24
-        targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        targetSdk = 35
+        versionCode = buildVersionCode
+        versionName = buildVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
             val keyPath = System.getenv("KEYSTORE_PATH")
+            val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+            val keyAliasStr = System.getenv("KEY_ALIAS")
+            val keyPasswordStr = System.getenv("KEY_PASSWORD")
+
             if (!keyPath.isNullOrEmpty() && file(keyPath).exists()) {
                 storeFile = file(keyPath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+                storePassword = keystorePassword
+                keyAlias = keyAliasStr
+                keyPassword = keyPasswordStr
             }
         }
     }
@@ -40,7 +47,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigning = signingConfigs.getByName("release")
+            signingConfig = if (releaseSigning.storeFile != null) {
+                releaseSigning
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -60,22 +72,30 @@ android {
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2026.02.00")
+    // AndroidX Core & Lifecycle
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.activity:activity-compose:1.10.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+
+    // Jetpack Compose BoM (Updated to 2024.12.01 / modern stable)
+    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.activity:activity-compose:1.10.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
 
-    // Coil 3
+    // Navigation Compose
+    implementation("androidx.navigation:navigation-compose:2.8.8")
+
+    // Coil 3 (Image Loading)
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
 
-    // Room Database
+    // Room Database (Updated to 2.6.1 stable)
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
@@ -87,24 +107,26 @@ dependencies {
     // Google Mobile Ads (AdMob)
     implementation("com.google.android.gms:play-services-ads:23.6.0")
 
-    // WorkManager
+    // WorkManager (Background wallpaper scheduling)
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     // Glance Home Screen Widget
     implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation("androidx.glance:glance-material3:1.1.1")
 
-    // Networking & Serialization
+    // Networking, Gson & Serialization
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
+    implementation("com.google.code.gson:gson:2.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Firebase BoM & Remote Config
-    implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
+    // Firebase BoM & Services (Updated to 33.10.0)
+    implementation(platform("com.google.firebase:firebase-bom:33.10.0"))
     implementation("com.google.firebase:firebase-config-ktx")
     implementation("com.google.firebase:firebase-analytics-ktx")
 }

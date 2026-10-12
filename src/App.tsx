@@ -4,18 +4,25 @@ import {
   Smartphone, Filter, BookOpen, ChevronDown, Check,
   RefreshCw, Bookmark, Share2, Star, Clock, Wifi, WifiOff,
   Sliders, Settings2, Sun, Moon, CheckSquare, Square, FolderDown,
-  Volume2, VolumeX
+  Volume2, VolumeX, Play, Pause, ArrowRight, Zap, Hourglass, RotateCw,
+  Type, Shuffle, Flame
 } from 'lucide-react';
-import { Wallpaper, LanguageOption, AppThemeMode } from './types';
+import { Wallpaper, LanguageOption, AppThemeMode, FontThemeId, WallpaperFadeMode } from './types';
+import { FONT_THEMES, WALLPAPER_FADE_OPTIONS, getFontTheme } from './utils/fontThemes';
 import { PhonePreviewModal } from './components/PhonePreviewModal';
 import { UpgradeModal } from './components/UpgradeModal';
 import { AutoChangerModal } from './components/AutoChangerModal';
+import { SettingsModal, SettingsTab } from './components/SettingsModal';
 import { DailyVerseBanner } from './components/DailyVerseBanner';
+import { StreakTrackerCard } from './components/StreakTrackerCard';
 import { TopicsExplorerModal } from './components/TopicsExplorerModal';
+import { DailyVerseQuote } from './components/DailyVerseQuote';
+import { StreakData, getStreakData, recordScriptureInteraction } from './utils/streakUtils';
 import { ALL_BIBLE_TOPICS, VISUAL_THEMES_DIRECTORY } from './data/bibleTopics';
 import { shareWallpaper } from './utils/shareUtils';
 import { narrateScripture, stopScriptureNarration } from './utils/speechUtils';
 import { downloadWallpapersAsZip, BulkDownloadProgress } from './utils/bulkDownload';
+import { triggerWebHaptic } from './utils/haptics';
 import { 
   getOfflineWallpapers, 
   saveOfflineWallpapers, 
@@ -50,11 +57,27 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [wallpapers, setWallpapers] = useState<Wallpaper[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isFilterTransitioning, setIsFilterTransitioning] = useState<boolean>(false);
   const [previewingWallpaper, setPreviewingWallpaper] = useState<Wallpaper | null>(null);
   const [isUpgradeOpen, setIsUpgradeOpen] = useState<boolean>(false);
-  const [isAutoChangerOpen, setIsAutoChangerOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('haptics');
   const [isTopicsModalOpen, setIsTopicsModalOpen] = useState<boolean>(false);
   const [isPremiumUser, setIsPremiumUser] = useState<boolean>(false);
+
+  const openSettings = (tab: SettingsTab = 'haptics') => {
+    triggerWebHaptic('selection');
+    setSettingsTab(tab);
+    setIsSettingsOpen(true);
+  };
+
+  const setIsAutoChangerOpen = (open: boolean) => {
+    if (open) {
+      openSettings('autochanger');
+    } else {
+      setIsSettingsOpen(false);
+    }
+  };
 
   const activeTopicInfo = useMemo(() => {
     if (selectedCategory === 'All') return null;
@@ -90,6 +113,59 @@ export function App() {
     }
   }, [themeMode]);
 
+  // Active Fonts Theme state (customizable typography styling)
+  const [fontTheme, setFontTheme] = useState<FontThemeId>(() => {
+    try {
+      const saved = localStorage.getItem('bible_wallpapers_font_theme');
+      return (saved as FontThemeId) || 'cathedral';
+    } catch {
+      return 'cathedral';
+    }
+  });
+  const [fontThemeDropdownOpen, setFontThemeDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('bible_wallpapers_font_theme', fontTheme);
+  }, [fontTheme]);
+
+  // Active Wallpaper Fading mode state
+  const [wallpaperFade, setWallpaperFade] = useState<WallpaperFadeMode>(() => {
+    try {
+      const saved = localStorage.getItem('bible_wallpapers_wallpaper_fade');
+      return (saved as WallpaperFadeMode) || 'soft';
+    } catch {
+      return 'soft';
+    }
+  });
+  const [fadeDropdownOpen, setFadeDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('bible_wallpapers_wallpaper_fade', wallpaperFade);
+  }, [wallpaperFade]);
+
+  const currentFontThemeOption = useMemo(() => getFontTheme(fontTheme), [fontTheme]);
+
+  const handleSelectFontTheme = (themeId: FontThemeId) => {
+    triggerWebHaptic('selection');
+    setFontTheme(themeId);
+    setFontThemeDropdownOpen(false);
+  };
+
+  const handleSelectWallpaperFade = (fadeMode: WallpaperFadeMode) => {
+    triggerWebHaptic('selection');
+    setWallpaperFade(fadeMode);
+    setFadeDropdownOpen(false);
+  };
+
+  // Daily Scripture Reading Streak State
+  const [streakData, setStreakData] = useState<StreakData>(() => getStreakData());
+
+  const handleScriptureInteracted = () => {
+    const result = recordScriptureInteraction();
+    setStreakData(result.data);
+    return result;
+  };
+
   // Offline & Auto-changer state
   const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
   const [isNetworkOffline, setIsNetworkOffline] = useState<boolean>(!navigator.onLine);
@@ -106,7 +182,40 @@ export function App() {
   const [bulkProgress, setBulkProgress] = useState<BulkDownloadProgress | null>(null);
   const [upgradeReason, setUpgradeReason] = useState<string | undefined>(undefined);
 
+  // Smooth cross-fade transition handler when changing categories, visual themes, or filters
+  const handleCategoryChange = (category: string) => {
+    if (category === selectedCategory) return;
+    triggerWebHaptic('selection');
+    setIsFilterTransitioning(true);
+    setSelectedCategory(category);
+    setTimeout(() => {
+      setIsFilterTransitioning(false);
+    }, 280);
+  };
+
+  const handleVisualThemeChange = (theme: string) => {
+    if (theme === selectedVisualTheme) return;
+    triggerWebHaptic('selection');
+    setIsFilterTransitioning(true);
+    setSelectedVisualTheme(theme);
+    setTimeout(() => {
+      setIsFilterTransitioning(false);
+    }, 280);
+  };
+
+  const handleTestamentChange = (testament: string) => {
+    if (testament === selectedTestament) return;
+    triggerWebHaptic('selection');
+    setIsFilterTransitioning(true);
+    setSelectedTestament(testament);
+    setTimeout(() => {
+      setIsFilterTransitioning(false);
+    }, 280);
+  };
+
   const toggleSelectWallpaper = (id: string) => {
+    // Crisp 'selection' intensity pattern for toggling bulk item selection
+    triggerWebHaptic('selection');
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
@@ -114,14 +223,19 @@ export function App() {
 
   const handleSelectAll = () => {
     if (selectedIds.length === displayedWallpapers.length) {
+      // 'warning' intensity pattern when deselecting all
+      triggerWebHaptic('warning');
       setSelectedIds([]);
     } else {
+      // Crisp 'selection' intensity pattern when selecting all
+      triggerWebHaptic('selection');
       setSelectedIds(displayedWallpapers.map((w) => w.id));
     }
   };
 
   const handleBulkDownload = async () => {
     if (!isPremiumUser) {
+      triggerWebHaptic('warning');
       setUpgradeReason("Bulk 1-Click ZIP Collection Download is an exclusive VIP privilege. Upgrade to VIP to export entire wallpaper sets in full HD.");
       setIsUpgradeOpen(true);
       return;
@@ -134,8 +248,11 @@ export function App() {
     if (itemsToDownload.length === 0) return;
 
     setIsBulkDownloading(true);
+    triggerWebHaptic('heavy');
     try {
       await downloadWallpapersAsZip(itemsToDownload, (p) => setBulkProgress(p));
+      // Uplifting 'success' intensity pattern upon successful archive generation
+      triggerWebHaptic('success');
       setShareToast(`Downloaded ${itemsToDownload.length} wallpapers in ZIP archive!`);
       setSelectedIds([]);
       setSelectionMode(false);
@@ -159,6 +276,26 @@ export function App() {
       setSharedWallpaperId(null);
       setShareToast(null);
     }, 3000);
+  };
+
+  // Select a random wallpaper from the collection and open directly in Phone Preview modal
+  const handleRandomScripture = () => {
+    const pool = wallpapers.length > 0 ? wallpapers : (getOfflineWallpapers() || []);
+    if (pool.length === 0) return;
+
+    triggerWebHaptic('selection');
+
+    // Pick a random wallpaper, ensuring variety when multiple items exist
+    let randomIdx = Math.floor(Math.random() * pool.length);
+    if (pool.length > 1 && previewingWallpaper && pool[randomIdx].id === previewingWallpaper.id) {
+      randomIdx = (randomIdx + 1) % pool.length;
+    }
+
+    const picked = pool[randomIdx];
+    stopScriptureNarration();
+    setSpeakingCardId(null);
+    handleScriptureInteracted();
+    setPreviewingWallpaper(picked);
   };
 
   const [speakingCardId, setSpeakingCardId] = useState<string | null>(null);
@@ -212,9 +349,17 @@ export function App() {
   }, [favorites]);
 
   const toggleFavorite = (id: string) => {
-    setFavorites((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+    setFavorites((prev) => {
+      const willBeBookmarked = !prev.includes(id);
+      if (willBeBookmarked) {
+        // Distinct 'success' pattern when bookmarking/favoriting
+        triggerWebHaptic('success');
+      } else {
+        // Crisp 'selection' pattern when unbookmarking
+        triggerWebHaptic('selection');
+      }
+      return willBeBookmarked ? [...prev, id] : prev.filter((item) => item !== id);
+    });
   };
 
   const handleSubscriptionSuccess = () => {
@@ -330,6 +475,61 @@ export function App() {
     const mins = Math.ceil(secs / 60);
     return `${mins}m`;
   };
+
+  // Next wallpaper in the automatic rotation queue
+  const nextWallpaper = useMemo(() => {
+    if (wallpapers.length <= 1) return null;
+    const current = currentLockscreenWallpaper || wallpapers[0];
+    const currIdx = wallpapers.findIndex((w) => w.id === current.id);
+    const nextIdx = (currIdx + 1) % wallpapers.length;
+    return wallpapers[nextIdx];
+  }, [wallpapers, currentLockscreenWallpaper]);
+
+  // Exact countdown timer formatting (HH:MM:SS or MM:SS)
+  const formatCountdownTimer = (secs: number) => {
+    const hours = Math.floor(secs / 3600);
+    const mins = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (hours > 0) {
+      return `${hours}h ${mins.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s`;
+    }
+    return `${mins}m ${s.toString().padStart(2, '0')}s`;
+  };
+
+  // Immediate manual rotation handler
+  const handleRotateNow = () => {
+    if (wallpapers.length === 0) return;
+    triggerWebHaptic('selection');
+    const curr = currentLockscreenWallpaper || wallpapers[0];
+    const currIdx = wallpapers.findIndex((w) => w.id === curr.id);
+    const nextIdx = (currIdx + 1) % wallpapers.length;
+    const nextWp = wallpapers[nextIdx];
+    setCurrentLockscreenWallpaper(nextWp);
+
+    const newConfig = { ...autoConfig, lastChanged: Date.now() };
+    setAutoConfig(newConfig);
+    saveAutoChangerConfig(newConfig);
+    setRemainingTimeSeconds(autoConfig.intervalMinutes * 60);
+  };
+
+  // Quick toggle auto rotation active/paused
+  const handleToggleAutoRotation = () => {
+    triggerWebHaptic('selection');
+    const newConfig = {
+      ...autoConfig,
+      enabled: !autoConfig.enabled,
+      lastChanged: Date.now(),
+    };
+    setAutoConfig(newConfig);
+    saveAutoChangerConfig(newConfig);
+    if (!autoConfig.enabled) {
+      setRemainingTimeSeconds(autoConfig.intervalMinutes * 60);
+    }
+  };
+
+  const totalIntervalSeconds = Math.max(60, (autoConfig.intervalMinutes || 60) * 60);
+  const elapsedIntervalSeconds = Math.max(0, totalIntervalSeconds - remainingTimeSeconds);
+  const rotationProgressPercent = Math.min(100, Math.max(0, (elapsedIntervalSeconds / totalIntervalSeconds) * 100));
 
   const isLight = themeMode === 'light';
 
@@ -484,6 +684,152 @@ export function App() {
               )}
             </div>
 
+            {/* Fonts Theme Selector Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setFontThemeDropdownOpen(!fontThemeDropdownOpen);
+                  setFadeDropdownOpen(false);
+                  setLangDropdownOpen(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition ${
+                  isLight
+                    ? 'bg-[#eee7d8] border-[#dfd5c3] hover:border-[#cfc4b0] text-stone-800'
+                    : 'bg-stone-900 border-stone-800 hover:border-stone-700 text-stone-200'
+                }`}
+                title="Change Scripture Typography Font Theme"
+              >
+                <Type className="w-3.5 h-3.5 text-amber-500" />
+                <span className="hidden lg:inline">Font:</span>
+                <span className="font-semibold">{currentFontThemeOption.name.split(' ')[0]}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+              </button>
+
+              {fontThemeDropdownOpen && (
+                <div className={`absolute right-0 mt-2 w-64 border rounded-2xl shadow-2xl py-2 z-50 animate-fade-in ${
+                  isLight ? 'bg-[#fbf7ee] border-[#dfd5c3]' : 'bg-stone-900 border-stone-800'
+                }`}>
+                  <div className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider border-b flex items-center justify-between ${
+                    isLight ? 'text-stone-500 border-[#e5dcce]' : 'text-stone-400 border-stone-800'
+                  }`}>
+                    <span>Fonts Theme</span>
+                    <span className="text-[10px] text-amber-500 font-mono">5 styles</span>
+                  </div>
+                  <div className="py-1">
+                    {FONT_THEMES.map((th) => (
+                      <button
+                        key={th.id}
+                        onClick={() => handleSelectFontTheme(th.id)}
+                        className={`w-full px-3 py-2 text-xs flex flex-col text-left transition ${
+                          fontTheme === th.id
+                            ? (isLight ? 'bg-amber-500/15 text-amber-950 font-bold' : 'bg-amber-600/20 text-amber-300 font-bold')
+                            : (isLight ? 'hover:bg-[#eee5d4] text-stone-800' : 'hover:bg-stone-800/80 text-stone-200')
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-semibold">{th.name}</span>
+                          {fontTheme === th.id && <Check className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                        </div>
+                        <span className={`text-[11px] truncate opacity-90 mt-0.5 ${th.verseFontClass}`}>
+                          "The Lord is my light"
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Wallpaper Fading Selector Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setFadeDropdownOpen(!fadeDropdownOpen);
+                  setFontThemeDropdownOpen(false);
+                  setLangDropdownOpen(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition ${
+                  isLight
+                    ? 'bg-[#eee7d8] border-[#dfd5c3] hover:border-[#cfc4b0] text-stone-800'
+                    : 'bg-stone-900 border-stone-800 hover:border-stone-700 text-stone-200'
+                }`}
+                title="Change Wallpaper Fading & Edge Vignette"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span className="hidden lg:inline">Fade:</span>
+                <span className="font-semibold">{WALLPAPER_FADE_OPTIONS.find((f) => f.id === wallpaperFade)?.name.split(' ')[0]}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+              </button>
+
+              {fadeDropdownOpen && (
+                <div className={`absolute right-0 mt-2 w-56 border rounded-2xl shadow-2xl py-2 z-50 animate-fade-in ${
+                  isLight ? 'bg-[#fbf7ee] border-[#dfd5c3]' : 'bg-stone-900 border-stone-800'
+                }`}>
+                  <div className={`px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider border-b flex items-center justify-between ${
+                    isLight ? 'text-stone-500 border-[#e5dcce]' : 'text-stone-400 border-stone-800'
+                  }`}>
+                    <span>Wallpaper Fading</span>
+                    <span className="text-[10px] text-amber-500 font-mono">Vignette</span>
+                  </div>
+                  <div className="py-1">
+                    {WALLPAPER_FADE_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleSelectWallpaperFade(opt.id)}
+                        className={`w-full px-3 py-2 text-xs flex items-center justify-between text-left transition ${
+                          wallpaperFade === opt.id
+                            ? (isLight ? 'bg-amber-500/15 text-amber-950 font-bold' : 'bg-amber-600/20 text-amber-300 font-bold')
+                            : (isLight ? 'hover:bg-[#eee5d4] text-stone-800' : 'hover:bg-stone-800/80 text-stone-200')
+                        }`}
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold">{opt.name}</span>
+                          <span className="text-[10px] text-stone-400">{opt.subtitle}</span>
+                        </div>
+                        {wallpaperFade === opt.id && <Check className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Random Scripture Button */}
+            <button
+              onClick={handleRandomScripture}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition shadow-xs hover:scale-[1.02] active:scale-95 ${
+                isLight
+                  ? 'bg-amber-600/10 hover:bg-amber-600/20 border-amber-600/30 text-amber-900 hover:text-amber-950'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300 hover:text-amber-200'
+              }`}
+              title="Select a random scripture wallpaper from the collection and open preview"
+            >
+              <Shuffle className="w-3.5 h-3.5 text-amber-500" />
+              <span className="hidden md:inline">Random Scripture</span>
+              <span className="md:hidden">Random</span>
+            </button>
+
+            {/* Daily Scripture Reading Streak Header Quick Badge */}
+            <button
+              onClick={() => {
+                triggerWebHaptic('selection');
+                const el = document.getElementById('daily-streak-section');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold border transition shadow-xs hover:scale-[1.02] active:scale-95 ${
+                isLight
+                  ? 'bg-amber-600/10 hover:bg-amber-600/20 border-amber-600/30 text-amber-950'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300'
+              }`}
+              title={`Daily Scripture Streak: ${streakData.currentStreak} Days! Click to view milestone rewards`}
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-500 fill-current animate-pulse" />
+              <span className="font-mono">{streakData.currentStreak}d</span>
+              <span className="hidden xl:inline text-[11px] font-normal opacity-85">Streak</span>
+            </button>
+
             {/* Favorites Toggle */}
             <button
               onClick={() => setFilterFavoritesOnly(!filterFavoritesOnly)}
@@ -503,6 +849,20 @@ export function App() {
                   {favorites.length}
                 </span>
               )}
+            </button>
+
+            {/* Settings & Preferences Menu Button */}
+            <button
+              onClick={() => openSettings('haptics')}
+              className={`p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 shadow-xs hover:scale-[1.02] active:scale-95 ${
+                isLight
+                  ? 'bg-[#eee7d8] hover:bg-[#e4dac6] border-[#dfd5c3] text-stone-850 hover:text-stone-950'
+                  : 'bg-stone-900 hover:bg-stone-850 border-stone-800 text-stone-300 hover:text-white'
+              }`}
+              title="Open Settings & Preferences (Haptic Feedback toggle & intensity, Auto Lock Screen, Offline Storage)"
+            >
+              <Settings2 className="w-4 h-4 text-amber-500" />
+              <span className="hidden sm:inline">Settings</span>
             </button>
 
             {/* VIP Pass Button */}
@@ -552,15 +912,40 @@ export function App() {
           language={selectedLanguage}
           isPremiumUser={isPremiumUser}
           isLight={isLight}
-          onPreviewWallpaper={(w) => setPreviewingWallpaper(w)}
+          onPreviewWallpaper={(w) => {
+            handleScriptureInteracted();
+            setPreviewingWallpaper(w);
+          }}
           onSetLockScreen={(w) => {
+            handleScriptureInteracted();
             setCurrentLockscreenWallpaper(w);
             setIsAutoChangerOpen(true);
           }}
           onOpenUpgradeModal={() => setIsUpgradeOpen(true)}
-          onToggleFavorite={toggleFavorite}
+          onToggleFavorite={(id) => {
+            handleScriptureInteracted();
+            toggleFavorite(id);
+          }}
           favorites={favorites}
+          fontTheme={fontTheme}
+          wallpaperFade={wallpaperFade}
+          onInteract={handleScriptureInteracted}
         />
+
+        {/* Daily Scripture Reading Streak Tracker Module */}
+        <div id="daily-streak-section">
+          <StreakTrackerCard
+            streakData={streakData}
+            onStreakUpdate={(updated) => setStreakData(updated)}
+            isLight={isLight}
+            onReadVerseClick={() => {
+              handleScriptureInteracted();
+              if (wallpapers.length > 0) {
+                setPreviewingWallpaper(wallpapers[0]);
+              }
+            }}
+          />
+        </div>
 
         {/* Hero Section */}
         <div className={`relative rounded-3xl overflow-hidden border p-6 md:p-10 shadow-xl transition-colors ${
@@ -630,70 +1015,265 @@ export function App() {
           </div>
         </div>
 
-        {/* 1-Hour Auto-Changer Active Live Lock Screen Card */}
-        {currentLockscreenWallpaper && (
-          <div className={`p-4 sm:p-5 rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors ${
-            isLight
-              ? 'bg-[#f4ede0] border-amber-600/30 shadow-xs'
-              : 'bg-stone-900/90 border-amber-500/30 shadow-md'
-          }`}>
-            <div className="flex items-center gap-4 w-full sm:w-auto">
-              <div className="relative w-14 h-24 sm:w-16 sm:h-28 rounded-2xl overflow-hidden border border-amber-500/40 shrink-0 shadow">
-                <img
-                  src={currentLockscreenWallpaper.imageUrl}
-                  alt={currentLockscreenWallpaper.verseReference}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/25" />
-                <div className="absolute bottom-1 right-1 px-1 py-0.2 rounded bg-black/60 text-[8px] text-amber-300 font-mono">
-                  LOCK
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider ${
-                    isLight ? 'text-emerald-700' : 'text-emerald-400'
+        {/* Automatic Wallpaper Rotation Dashboard Module with Live Visual Progress Bar & Countdown Timer */}
+        {(currentLockscreenWallpaper || wallpapers.length > 0) && (() => {
+          const activeWallpaper = currentLockscreenWallpaper || wallpapers[0];
+          return (
+            <div className={`p-5 sm:p-6 rounded-3xl border transition-all duration-300 shadow-lg ${
+              isLight
+                ? 'bg-gradient-to-r from-[#fbf6ec] via-[#f5ede0] to-[#f9f3e9] border-[#d8cca8] shadow-md'
+                : 'bg-gradient-to-r from-stone-900 via-stone-900/95 to-amber-950/20 border-amber-500/25 shadow-xl'
+            }`}>
+              {/* Header: Title, Status Indicator, and Live Countdown Timer Badge */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-800/20 dark:border-stone-800/60">
+                <div className="flex items-center flex-wrap gap-2.5">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                    autoConfig.enabled
+                      ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                      : isLight
+                        ? 'bg-stone-300/60 text-stone-700 border border-stone-300'
+                        : 'bg-stone-800 text-stone-400 border border-stone-700'
                   }`}>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    Lock Screen Rotator: Active (1 Hour)
+                    <span className={`w-2 h-2 rounded-full ${autoConfig.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-stone-400'}`} />
+                    {autoConfig.enabled ? 'Automatic Lock Screen Rotation: Active' : 'Automatic Rotation: Paused'}
                   </span>
-                  <span className={`text-[10px] font-mono ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
-                    Next: {formatRemainingMinutes(remainingTimeSeconds)}
+
+                  <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full border ${
+                    isLight 
+                      ? 'bg-amber-600/10 text-amber-900 border-amber-600/20' 
+                      : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                  }`}>
+                    Every {autoConfig.intervalMinutes}m ({autoConfig.intervalMinutes === 60 ? '1 Hour' : `${autoConfig.intervalMinutes} Mins`})
                   </span>
                 </div>
-                <h4 className={`text-sm font-serif-scripture italic line-clamp-1 ${
-                  isLight ? 'text-stone-900' : 'text-white'
+
+                {/* Digital Live Countdown Timer Badge */}
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-2xl border font-mono text-xs font-bold self-start sm:self-auto shadow-xs ${
+                  autoConfig.enabled
+                    ? isLight
+                      ? 'bg-amber-600/10 border-amber-600/30 text-amber-950'
+                      : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                    : isLight
+                      ? 'bg-stone-200 border-stone-300 text-stone-600'
+                      : 'bg-stone-800 border-stone-700 text-stone-400'
                 }`}>
-                  "{currentLockscreenWallpaper.verseText}"
-                </h4>
-                <p className="text-xs font-cinzel font-bold text-amber-600 dark:text-amber-300 mt-0.5">
-                  — {currentLockscreenWallpaper.verseReference}
-                </p>
+                  <Clock className={`w-3.5 h-3.5 ${autoConfig.enabled ? 'text-amber-500 animate-spin [animation-duration:10s]' : 'text-stone-400'}`} />
+                  <span>
+                    {autoConfig.enabled 
+                      ? `Next rotation in: ${formatCountdownTimer(remainingTimeSeconds)}` 
+                      : 'Rotation paused'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Visual Progress Bar Section */}
+              <div className="py-4 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-semibold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>
+                      Rotation Cycle Progress
+                    </span>
+                    <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
+                      {Math.round(rotationProgressPercent)}%
+                    </span>
+                  </div>
+                  <span className={`font-mono text-[11px] ${isLight ? 'text-stone-600' : 'text-stone-400'}`}>
+                    {autoConfig.enabled 
+                      ? `${formatCountdownTimer(remainingTimeSeconds)} remaining`
+                      : 'Paused'}
+                  </span>
+                </div>
+
+                {/* Progress Track */}
+                <div className={`w-full h-3 rounded-full overflow-hidden p-0.5 border shadow-inner ${
+                  isLight 
+                    ? 'bg-[#e8decb] border-[#d8ccb6]' 
+                    : 'bg-stone-950 border-stone-800'
+                }`}>
+                  <div 
+                    className={`h-full rounded-full transition-all duration-1000 ease-linear relative ${
+                      autoConfig.enabled
+                        ? 'bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-400 shadow-sm'
+                        : 'bg-stone-600'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(2, rotationProgressPercent))}%` }}
+                  >
+                    {/* Glowing head dot indicator */}
+                    {autoConfig.enabled && (
+                      <span className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)] animate-ping" />
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] text-stone-500 dark:text-stone-400 font-mono">
+                  <span>Cycle start (0m)</span>
+                  <span className="italic">Automatic background wallpaper rotation</span>
+                  <span>Target ({autoConfig.intervalMinutes}m)</span>
+                </div>
+              </div>
+
+              {/* Middle Row: Active Wallpaper + Queue Preview + Interactive Actions */}
+              <div className="pt-2 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                {/* Active & Next Wallpapers */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1">
+                  {/* Current Active Wallpaper Item */}
+                  <div className="flex items-center gap-3">
+                    <div 
+                      onClick={() => setPreviewingWallpaper(activeWallpaper)}
+                      className="group relative w-14 h-24 sm:w-16 sm:h-28 rounded-2xl overflow-hidden border border-amber-500/40 shrink-0 shadow-md cursor-pointer hover:scale-105 transition-transform"
+                      title="Click to preview active lock screen"
+                    >
+                      <img
+                        key={activeWallpaper.id}
+                        src={activeWallpaper.imageUrl}
+                        alt={activeWallpaper.verseReference}
+                        className="w-full h-full object-cover animate-wallpaper-fade"
+                      />
+                      {/* Wallpaper Fading Overlay */}
+                      {wallpaperFade === 'soft' && (
+                        <div className="absolute inset-0 wallpaper-fade-soft pointer-events-none" />
+                      )}
+                      {wallpaperFade === 'deep' && (
+                        <div className="absolute inset-0 wallpaper-fade-deep pointer-events-none" />
+                      )}
+                      {wallpaperFade === 'dreamy' && (
+                        <div className="absolute inset-0 wallpaper-fade-dreamy pointer-events-none" />
+                      )}
+                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/5 transition-colors" />
+                      <div className="absolute bottom-1 right-1 px-1.5 py-0.2 rounded bg-black/75 text-[8px] text-amber-300 font-mono font-bold tracking-wider">
+                        ACTIVE
+                      </div>
+                    </div>
+
+                    <div className="max-w-xs sm:max-w-sm">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                          Current Lock Screen
+                        </span>
+                        <span className="text-[10px] text-stone-400">
+                          • {activeWallpaper.category}
+                        </span>
+                      </div>
+                      <h4 className={`text-sm ${currentFontThemeOption.verseFontClass} line-clamp-1 ${
+                        isLight ? 'text-stone-900 font-medium' : 'text-white'
+                      }`}>
+                        "{activeWallpaper.verseText}"
+                      </h4>
+                      <p className={`text-xs ${currentFontThemeOption.refFontClass} font-bold text-amber-700 dark:text-amber-300 mt-0.5`}>
+                        — {activeWallpaper.verseReference}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Next Up in Rotation Queue */}
+                  {nextWallpaper && (
+                    <div className={`hidden md:flex items-center gap-3 pl-4 border-l ${
+                      isLight ? 'border-stone-300' : 'border-stone-800'
+                    }`}>
+                      <div className="text-[10px] text-stone-400 font-mono flex flex-col items-center">
+                        <span>Rotates</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-amber-500 mt-0.5" />
+                      </div>
+
+                      <div 
+                        onClick={() => setPreviewingWallpaper(nextWallpaper)}
+                        className="group relative w-11 h-18 sm:w-12 sm:h-20 rounded-xl overflow-hidden border border-stone-600/40 shrink-0 opacity-80 hover:opacity-100 cursor-pointer shadow hover:scale-105 transition-all"
+                        title="Next wallpaper in rotation queue"
+                      >
+                        <img
+                          src={nextWallpaper.imageUrl}
+                          alt={nextWallpaper.verseReference}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/30" />
+                        <div className="absolute bottom-1 right-1 px-1 py-0.2 rounded bg-black/80 text-[7px] text-stone-200 font-mono">
+                          NEXT
+                        </div>
+                      </div>
+
+                      <div className="max-w-[170px]">
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-stone-400 block">
+                          Next Scripture
+                        </span>
+                        <p className={`text-xs font-cinzel font-semibold truncate ${isLight ? 'text-stone-800' : 'text-stone-300'}`}>
+                          {nextWallpaper.verseReference}
+                        </p>
+                        <p className="text-[10px] text-stone-400 truncate">
+                          {nextWallpaper.visualTheme || nextWallpaper.category}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Control Action Buttons */}
+                <div className="flex items-center flex-wrap sm:flex-nowrap gap-2 justify-end w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-stone-800/20 dark:border-stone-800/60">
+                  {/* Manual Rotate Now */}
+                  <button
+                    onClick={handleRotateNow}
+                    className="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-amber-600/20 transition hover:scale-[1.02] active:scale-95"
+                    title="Advance to next wallpaper immediately and restart countdown timer"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    <span>Rotate Now</span>
+                  </button>
+
+                  {/* Pause / Resume Button */}
+                  <button
+                    onClick={handleToggleAutoRotation}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border transition ${
+                      autoConfig.enabled
+                        ? isLight
+                          ? 'bg-[#e8decb] hover:bg-[#dfd4c0] border-[#d5caba] text-stone-800'
+                          : 'bg-stone-800 hover:bg-stone-750 border-stone-700 text-stone-300'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
+                    }`}
+                    title={autoConfig.enabled ? 'Pause automatic wallpaper rotation' : 'Resume automatic wallpaper rotation'}
+                  >
+                    {autoConfig.enabled ? (
+                      <>
+                        <Pause className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Pause</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Resume</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Inspect Lock Screen Fullscreen */}
+                  <button
+                    onClick={() => setPreviewingWallpaper(activeWallpaper)}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border transition ${
+                      isLight
+                        ? 'bg-[#f0e7d7] hover:bg-[#e7ddcb] border-[#d8cca8] text-amber-950'
+                        : 'bg-stone-850 hover:bg-stone-800 border-stone-700 text-stone-200'
+                    }`}
+                    title="Open phone frame lock screen preview"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="hidden sm:inline">Inspect Phone</span>
+                  </button>
+
+                  {/* Changer Settings Modal */}
+                  <button
+                    onClick={() => setIsAutoChangerOpen(true)}
+                    className={`p-2.5 rounded-xl border transition ${
+                      isLight
+                        ? 'bg-[#ece3d2] hover:bg-[#e3d8c5] border-[#d8cca8] text-stone-800'
+                        : 'bg-stone-850 hover:bg-stone-800 border-stone-700 text-stone-300'
+                    }`}
+                    title="Change rotation interval & configure offline caching"
+                  >
+                    <Settings2 className="w-4 h-4 text-amber-500" />
+                  </button>
+                </div>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <button
-                onClick={() => setPreviewingWallpaper(currentLockscreenWallpaper)}
-                className={`flex-1 sm:flex-initial px-4 py-2 border rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
-                  isLight
-                    ? 'bg-[#e9e0cf] hover:bg-[#ded5c4] border-[#d5caba] text-stone-850'
-                    : 'bg-stone-800 hover:bg-stone-750 border-stone-700 text-stone-200'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>Inspect Lock Screen</span>
-              </button>
-              <button
-                onClick={() => setIsAutoChangerOpen(true)}
-                className="flex-1 sm:flex-initial px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow"
-              >
-                <Settings2 className="w-3.5 h-3.5" />
-                <span>Changer Settings</span>
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Scripture Topics & Visual Themes Filters */}
         <div className="space-y-2.5">
@@ -718,7 +1298,7 @@ export function App() {
             {SCRIPTURE_TOPICS.map((topic) => (
               <button
                 key={topic}
-                onClick={() => setSelectedCategory(topic)}
+                onClick={() => handleCategoryChange(topic)}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition border ${
                   selectedCategory === topic
                     ? 'bg-amber-600 border-amber-500 text-white shadow-md shadow-amber-600/20'
@@ -745,7 +1325,7 @@ export function App() {
               return (
                 <button
                   key={theme}
-                  onClick={() => setSelectedVisualTheme(theme)}
+                  onClick={() => handleVisualThemeChange(theme)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition border flex items-center gap-1.5 ${
                     selectedVisualTheme === theme
                       ? isLight
@@ -775,7 +1355,7 @@ export function App() {
               {['All', 'Old', 'New'].map((testament) => (
                 <button
                   key={testament}
-                  onClick={() => setSelectedTestament(testament)}
+                  onClick={() => handleTestamentChange(testament)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition border ${
                     selectedTestament === testament
                       ? isLight
@@ -838,7 +1418,7 @@ export function App() {
                   {activeTopicInfo.recommendedThemes.map((th, i) => (
                     <button
                       key={i}
-                      onClick={() => setSelectedVisualTheme(th)}
+                      onClick={() => handleVisualThemeChange(th)}
                       className={`px-2 py-0.5 rounded-lg text-[10px] font-medium border transition ${
                         selectedVisualTheme === th
                           ? 'bg-amber-600 text-white border-amber-500 font-bold'
@@ -923,6 +1503,7 @@ export function App() {
 
                   <button
                     onClick={() => {
+                      triggerWebHaptic('warning');
                       setSelectionMode(false);
                       setSelectedIds([]);
                     }}
@@ -935,7 +1516,10 @@ export function App() {
                 </>
               ) : (
                 <button
-                  onClick={() => setSelectionMode(true)}
+                  onClick={() => {
+                    triggerWebHaptic('selection');
+                    setSelectionMode(true);
+                  }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition flex items-center gap-1.5 ${
                     isLight
                       ? 'bg-[#f4eee2] hover:bg-[#eae2d2] border-[#ded4c3] text-stone-800'
@@ -983,7 +1567,12 @@ export function App() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            <div
+              key={`${selectedCategory}-${selectedVisualTheme}-${selectedTestament}`}
+              className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 transition-all duration-300 ${
+                isFilterTransitioning ? 'opacity-40 scale-[0.995] pointer-events-none' : 'opacity-100 scale-100 animate-cross-fade'
+              }`}
+            >
               {displayedWallpapers.map((wallpaper) => {
                 const isFav = favorites.includes(wallpaper.id);
                 const isCurrentLock = currentLockscreenWallpaper?.id === wallpaper.id;
@@ -1006,14 +1595,26 @@ export function App() {
                   >
                     {/* Background Wallpaper Image */}
                     <img
+                      key={`${wallpaper.id}-${wallpaperFade}`}
                       src={wallpaper.imageUrl}
                       alt={wallpaper.verseReference}
-                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 animate-wallpaper-fade"
                       loading="lazy"
                     />
 
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/30 transition-opacity" />
+
+                    {/* Active Wallpaper Fading Overlay */}
+                    {wallpaperFade === 'soft' && (
+                      <div className="absolute inset-0 wallpaper-fade-soft pointer-events-none transition-opacity duration-300" />
+                    )}
+                    {wallpaperFade === 'deep' && (
+                      <div className="absolute inset-0 wallpaper-fade-deep pointer-events-none transition-opacity duration-300" />
+                    )}
+                    {wallpaperFade === 'dreamy' && (
+                      <div className="absolute inset-0 wallpaper-fade-dreamy pointer-events-none transition-opacity duration-300" />
+                    )}
 
                     {/* Top Badges */}
                     <div className="relative z-10 p-3.5 flex items-center justify-between">
@@ -1089,12 +1690,18 @@ export function App() {
 
                     {/* Bottom Verse Details & Actions */}
                     <div className="relative z-10 mt-auto p-4 flex flex-col">
-                      <p className="font-serif-scripture italic text-stone-100 text-sm line-clamp-3 drop-shadow-md leading-relaxed">
+                      {wallpaper.wallpaperQuote && (
+                        <span className="text-[11px] font-semibold tracking-wide text-amber-200/95 mb-1 flex items-center gap-1 drop-shadow-sm line-clamp-1">
+                          <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span className="italic">"{wallpaper.wallpaperQuote}"</span>
+                        </span>
+                      )}
+                      <p className={`${currentFontThemeOption.verseFontClass} text-stone-100 text-sm line-clamp-3 drop-shadow-md leading-relaxed transition-all`}>
                         "{wallpaper.verseText}"
                       </p>
                       
                       <div className="mt-2 flex items-center justify-between">
-                        <span className="font-cinzel text-xs font-bold tracking-wider text-amber-300 drop-shadow">
+                        <span className={`${currentFontThemeOption.refFontClass} text-xs font-bold tracking-wider text-amber-300 drop-shadow`}>
                           {wallpaper.verseReference}
                         </span>
                         <span className="text-[10px] uppercase font-bold text-stone-400">
@@ -1108,6 +1715,7 @@ export function App() {
                           onClick={() => {
                             stopScriptureNarration();
                             setSpeakingCardId(null);
+                            handleScriptureInteracted();
                             setPreviewingWallpaper(wallpaper);
                           }}
                           className="flex-1 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow transition"
@@ -1162,6 +1770,13 @@ export function App() {
                           <Clock className="w-3.5 h-3.5" />
                         </button>
                       </div>
+
+                      {/* Inspiring Short Quote & Sermon Excerpt fetched from server API */}
+                      <DailyVerseQuote
+                        wallpaper={wallpaper}
+                        isLight={isLight}
+                        onInteracted={handleScriptureInteracted}
+                      />
                     </div>
                   </div>
                 );
@@ -1227,6 +1842,8 @@ export function App() {
           isPremiumUser={isPremiumUser}
           allWallpapers={displayedWallpapers}
           onNavigateWallpaper={(w) => setPreviewingWallpaper(w)}
+          fontTheme={fontTheme}
+          onFontThemeChange={(th) => setFontTheme(th)}
           onOpenUpgradeModal={() => {
             setUpgradeReason(`VIP Gold Scripture Wallpaper "${previewingWallpaper.verseReference}" is an exclusive privilege.`);
             setPreviewingWallpaper(null);
@@ -1252,24 +1869,31 @@ export function App() {
         onClose={() => setIsTopicsModalOpen(false)}
         selectedTopic={selectedCategory}
         onSelectTopic={(topicName, recommendedTheme) => {
+          triggerWebHaptic('selection');
+          setIsFilterTransitioning(true);
           setSelectedCategory(topicName);
           if (recommendedTheme) {
             setSelectedVisualTheme(recommendedTheme);
           }
+          setTimeout(() => {
+            setIsFilterTransitioning(false);
+          }, 280);
         }}
         isLight={isLight}
         wallpaperCountByTopic={wallpaperCountByTopic}
       />
 
-      {/* 1-Hour Automatic Lock Screen Changer & Offline Manager Modal */}
-      <AutoChangerModal
-        isOpen={isAutoChangerOpen}
-        onClose={() => setIsAutoChangerOpen(false)}
+      {/* Settings & Preferences Modal (Haptic Feedback, Auto-Changer, Offline Storage) */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        initialTab={settingsTab}
         wallpapers={wallpapers}
         currentLockscreenWallpaper={currentLockscreenWallpaper}
         onSelectLockscreenWallpaper={(w) => setCurrentLockscreenWallpaper(w)}
         isOfflineMode={isOfflineMode}
         onToggleOfflineMode={(offline) => setIsOfflineMode(offline)}
+        isLight={isLight}
       />
     </div>
   );

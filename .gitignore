@@ -16,7 +16,9 @@ app/build/
 .env.*.local
 *.jks
 *.keystore
+release.keystore
 play-store-key.json
+fastlane/play-store-credentials.json
 *.pem
 
 # Fastlane

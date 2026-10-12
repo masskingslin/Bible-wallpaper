@@ -6,7 +6,9 @@ import {
   handleWallpapersRequest, 
   handleOfflinePackRequest, 
   handleAutoChangeSettings,
-  handleDailyVerseRequest
+  handleDailyVerseRequest,
+  handleQuotesRequest,
+  handleQuoteByIdRequest
 } from './server/api/wallpapers.js';
 import { handleSubscriptionVerification } from './server/api/verify-subscription.js';
 
@@ -25,8 +27,16 @@ async function startServer() {
   app.get('/api/wallpapers', handleWallpapersRequest);
   app.get('/api/offline-pack', handleOfflinePackRequest);
   app.get('/api/verse-of-the-day', handleDailyVerseRequest);
+  app.get('/api/quotes', handleQuotesRequest);
+  app.get('/api/quotes/:id', handleQuoteByIdRequest);
   app.all('/api/auto-change-settings', handleAutoChangeSettings);
   app.post('/api/verify-subscription', handleSubscriptionVerification);
+
+  // Download Android Fixes Zip Bundle
+  app.get(['/api/download-android-zip', '/android-bundle.zip'], (_req, res) => {
+    const zipPath = path.resolve(__dirname, 'bible-wallpapers-android-fixes.zip');
+    res.download(zipPath, 'bible-wallpapers-android-fixes.zip');
+  });
 
   // Health & Offline Server Status check
   app.get('/api/health', (_req, res) => {

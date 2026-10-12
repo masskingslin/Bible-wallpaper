@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { NEW_WALLPAPERS_EN, NEW_WALLPAPERS_TA } from './newScriptureVerses.js';
 
 export interface WallpaperItem {
   id: string;
@@ -12,9 +13,15 @@ export interface WallpaperItem {
   isPremium: boolean;
   downloads?: number;
   tags?: string[];
+  wallpaperQuote?: string;
 }
 
 export const WALLPAPERS_MOCK: WallpaperItem[] = [
+  // ==========================================
+  // NEW SCRIPTURE VERSES (English)
+  // ==========================================
+  ...NEW_WALLPAPERS_EN,
+
   // ==========================================
   // ENGLISH (en) - Covering All 18 Bible Topics & All Themes
   // ==========================================
@@ -830,7 +837,12 @@ export const WALLPAPERS_MOCK: WallpaperItem[] = [
     isPremium: true,
     downloads: 7120,
     tags: ["வானங்கள்", "மகிமை", "சங்கீதம்", "ஆகாயவிரிவு", "நட்சத்திரங்கள்", "creation", "majesty"]
-  }
+  },
+
+  // ==========================================
+  // NEW SCRIPTURE VERSES (Tamil)
+  // ==========================================
+  ...NEW_WALLPAPERS_TA
 ];
 
 // Offline Cache settings
@@ -965,4 +977,46 @@ export function handleDailyVerseRequest(req: Request, res: Response) {
     remainingSeconds: Math.max(0, Math.floor((nextRefreshTimestamp - now) / 1000)),
     serverTime: new Date().toISOString()
   });
+}
+
+/**
+ * Daily Verse Quotes & Sermon Excerpts API
+ * GET /api/quotes?wallpaperId=...
+ * GET /api/quotes
+ */
+export async function handleQuotesRequest(req: Request, res: Response) {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const { getQuoteForWallpaper, getAllQuotesList } = await import('./quotesData.js');
+
+  const wallpaperId = req.query.wallpaperId as string;
+  const language = (req.query.language as string) || 'en';
+
+  if (wallpaperId) {
+    const item = getQuoteForWallpaper(wallpaperId, language);
+    if (item) {
+      return res.status(200).json(item);
+    }
+  }
+
+  const quotes = getAllQuotesList(language);
+  res.status(200).json({
+    data: quotes,
+    total: quotes.length,
+    timestamp: new Date().toISOString()
+  });
+}
+
+export async function handleQuoteByIdRequest(req: Request, res: Response) {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const { getQuoteForWallpaper } = await import('./quotesData.js');
+
+  const id = req.params.id;
+  const language = (req.query.language as string) || 'en';
+  const item = getQuoteForWallpaper(id, language);
+
+  if (!item) {
+    return res.status(404).json({ error: 'Quote not found for the specified wallpaper ID' });
+  }
+
+  return res.status(200).json(item);
 }

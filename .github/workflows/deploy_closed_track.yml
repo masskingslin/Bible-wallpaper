@@ -1,10 +1,21 @@
-name: Deploy to Closed Track
+name: Deploy to Google Play
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      track:
+        description: 'Google Play Release Track (internal, closed, alpha, beta, production)'
+        required: true
+        default: 'internal'
+        type: choice
+        options:
+          - internal
+          - closed
+          - alpha
+          - beta
 
 jobs:
   build-and-release:
@@ -63,11 +74,13 @@ jobs:
           ruby-version: '3.2'
           bundler-cache: true
 
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
       - name: Decode Google Service Account Key
         run: |
           mkdir -p fastlane
           RAW_KEY='${{ secrets.PLAY_STORE_JSON_KEY }}'
-          # Check if input is already raw JSON or base64 encoded
           if echo "$RAW_KEY" | grep -q "^{"; then
             echo "$RAW_KEY" > fastlane/play-store-credentials.json
           else
@@ -78,11 +91,22 @@ jobs:
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/release.keystore
 
-      - name: Run Fastlane Internal Deploy
+      - name: Run Fastlane Deploy
         run: |
-          bundle exec fastlane deploy_internal
+          bundle exec fastlane deploy_play_store
         env:
+          PLAY_STORE_TRACK: ${{ inputs.track || 'internal' }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
           KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload Signed AAB Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-bundle-run-${{ github.run_number }}
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: ignore

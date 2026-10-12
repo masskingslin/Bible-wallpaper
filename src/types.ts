@@ -10,6 +10,18 @@ export interface Wallpaper {
   isPremium: boolean;
   downloads?: number;
   tags?: string[];
+  wallpaperQuote?: string;
+  sermonExcerpt?: string;
+}
+
+export interface VerseQuoteData {
+  wallpaperId: string;
+  quote: string;
+  sermonExcerpt: string;
+  authorOrPreacher: string;
+  theme: string;
+  scriptureRef: string;
+  contextNote?: string;
 }
 
 export interface LanguageOption {
@@ -23,6 +35,19 @@ export type FontStyle = 'playfair' | 'cinzel' | 'script' | 'sans';
 export type TextPosition = 'top' | 'center' | 'bottom';
 export type TextColor = 'white' | 'ivory' | 'gold';
 export type AppThemeMode = 'dark' | 'light';
+export type ImageFilter = 'none' | 'grayscale' | 'sepia';
+export type WallpaperFadeMode = 'none' | 'soft' | 'deep' | 'dreamy';
+
+export type FontThemeId = 'cathedral' | 'sacred_script' | 'heritage_serif' | 'modern_clarity' | 'golden_gothic';
+
+export interface FontThemeOption {
+  id: FontThemeId;
+  name: string;
+  subtitle: string;
+  verseFontClass: string;
+  refFontClass: string;
+  description: string;
+}
 
 export interface CustomizationSettings {
   fontStyle: FontStyle;
@@ -31,6 +56,9 @@ export interface CustomizationSettings {
   overlayDarkness: number; // 0 to 80
   textColor: TextColor;
   showShadow: boolean;
+  imageFilter?: ImageFilter;
+  fontTheme?: FontThemeId;
+  wallpaperFade?: WallpaperFadeMode;
 }
 
 export interface BibleTopicInfo {

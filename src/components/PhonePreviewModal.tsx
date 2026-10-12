@@ -3,12 +3,19 @@ import {
   X, Download, Copy, Heart, Check, Smartphone, 
   Layers, Sliders, Sparkles, Moon, Sun, 
   Camera, Flashlight, ChevronRight, ChevronLeft, 
-  Share2, Crown, MoveHorizontal, Volume2, VolumeX
+  Share2, Crown, MoveHorizontal, Volume2, VolumeX,
+  Palette, Image as ImageIcon, Type
 } from 'lucide-react';
-import { Wallpaper, PreviewMode, CustomizationSettings, FontStyle, TextPosition, TextColor } from '../types';
+import { 
+  Wallpaper, PreviewMode, CustomizationSettings, 
+  FontStyle, TextPosition, TextColor, ImageFilter,
+  FontThemeId, WallpaperFadeMode
+} from '../types';
+import { FONT_THEMES, WALLPAPER_FADE_OPTIONS, getFontTheme } from '../utils/fontThemes';
 import { generateAndDownloadWallpaper } from '../utils/canvasExporter';
 import { shareWallpaper } from '../utils/shareUtils';
 import { isSpeechSynthesisSupported, narrateScripture, stopScriptureNarration } from '../utils/speechUtils';
+import { triggerWebHaptic } from '../utils/haptics';
 
 interface PhonePreviewModalProps {
   wallpaper: Wallpaper;
@@ -19,6 +26,8 @@ interface PhonePreviewModalProps {
   onOpenUpgradeModal: () => void;
   allWallpapers?: Wallpaper[];
   onNavigateWallpaper?: (wallpaper: Wallpaper) => void;
+  fontTheme?: FontThemeId;
+  onFontThemeChange?: (themeId: FontThemeId) => void;
 }
 
 export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
@@ -30,6 +39,8 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
   onOpenUpgradeModal,
   allWallpapers = [],
   onNavigateWallpaper,
+  fontTheme = 'cathedral',
+  onFontThemeChange,
 }) => {
   const [mode, setMode] = useState<PreviewMode>('lockscreen');
   const [copied, setCopied] = useState(false);
@@ -39,6 +50,24 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [speechSupported, setSpeechSupported] = useState<boolean>(true);
+
+  const [settings, setSettings] = useState<CustomizationSettings>({
+    fontStyle: 'playfair',
+    fontSize: 'md',
+    textPosition: 'center',
+    overlayDarkness: 35,
+    textColor: 'white',
+    showShadow: true,
+    imageFilter: 'none',
+    fontTheme: fontTheme,
+    wallpaperFade: 'soft',
+  });
+
+  useEffect(() => {
+    if (fontTheme && settings.fontTheme !== fontTheme) {
+      setSettings((prev) => ({ ...prev, fontTheme }));
+    }
+  }, [fontTheme]);
 
   // Initialize Web Speech API detection
   useEffect(() => {
@@ -155,15 +184,6 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
       setTimeout(() => setShared(false), 2500);
     }
   };
-
-  const [settings, setSettings] = useState<CustomizationSettings>({
-    fontStyle: 'playfair',
-    fontSize: 'md',
-    textPosition: 'center',
-    overlayDarkness: 35,
-    textColor: 'white',
-    showShadow: true,
-  });
 
   const [currentTime, setCurrentTime] = useState({
     time: '09:41',
@@ -318,13 +338,32 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
               {/* Phone Screen Outer Bezel */}
               <div className="relative w-full h-full rounded-[34px] overflow-hidden bg-black">
                 
-                {/* Wallpaper Background Image */}
+                {/* Wallpaper Background Image with Grayscale & Sepia Filters and Smooth Fading */}
                 <img
+                  key={`${wallpaper.id}-${settings.imageFilter}`}
                   src={wallpaper.imageUrl}
                   alt={wallpaper.verseReference}
-                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+                  className="absolute inset-0 w-full h-full object-cover transition-all duration-500 animate-wallpaper-fade"
+                  style={{
+                    filter: settings.imageFilter === 'grayscale'
+                      ? 'grayscale(100%) contrast(105%)'
+                      : settings.imageFilter === 'sepia'
+                      ? 'sepia(85%) contrast(95%) brightness(95%)'
+                      : 'none',
+                  }}
                   draggable={false}
                 />
+
+                {/* Wallpaper Fading & Edge Vignette Overlay */}
+                {settings.wallpaperFade === 'soft' && (
+                  <div className="absolute inset-0 wallpaper-fade-soft pointer-events-none transition-opacity duration-300" />
+                )}
+                {settings.wallpaperFade === 'deep' && (
+                  <div className="absolute inset-0 wallpaper-fade-deep pointer-events-none transition-opacity duration-300" />
+                )}
+                {settings.wallpaperFade === 'dreamy' && (
+                  <div className="absolute inset-0 wallpaper-fade-dreamy pointer-events-none transition-opacity duration-300" />
+                )}
 
                 {/* Adjustable Darkness Overlay */}
                 <div
@@ -334,7 +373,7 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
                   }}
                 />
 
-                {/* Gradient Vignette for Readability */}
+                {/* Gradient Vignette for Baseline Readability */}
                 <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
 
                 {/* Dynamic Island / Notch with Audio Activity indicator */}
@@ -459,15 +498,28 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
                       settings.showShadow ? 'drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)]' : ''
                     }`}
                   >
+                    {wallpaper.wallpaperQuote && (
+                      <p className="text-[11px] font-semibold tracking-wider uppercase text-amber-300/90 mb-1 drop-shadow-sm font-cinzel">
+                        ✦ {wallpaper.wallpaperQuote} ✦
+                      </p>
+                    )}
                     <p
-                      className={`${getFontFamilyClass(settings.fontStyle)} ${getTextColorClass(
+                      className={`${
+                        settings.fontTheme
+                          ? getFontTheme(settings.fontTheme).verseFontClass
+                          : getFontFamilyClass(settings.fontStyle)
+                      } ${getTextColorClass(
                         settings.textColor
                       )} ${getFontSizeClass(settings.fontSize)}`}
                     >
                       "{wallpaper.verseText}"
                     </p>
                     <p
-                      className={`mt-2 font-cinzel text-xs tracking-widest uppercase font-semibold ${
+                      className={`mt-2 ${
+                        settings.fontTheme
+                          ? getFontTheme(settings.fontTheme).refFontClass
+                          : 'font-cinzel tracking-widest uppercase'
+                      } text-xs font-semibold ${
                         settings.textColor === 'gold' ? 'text-yellow-400' : 'text-stone-200'
                       }`}
                     >
@@ -644,7 +696,8 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
                   Wallpaper Settings
                 </span>
                 <button
-                  onClick={() =>
+                  onClick={() => {
+                    triggerWebHaptic('selection');
                     setSettings({
                       fontStyle: 'playfair',
                       fontSize: 'md',
@@ -652,12 +705,159 @@ export const PhonePreviewModal: React.FC<PhonePreviewModalProps> = ({
                       overlayDarkness: 35,
                       textColor: 'white',
                       showShadow: true,
-                    })
-                  }
+                      imageFilter: 'none',
+                      fontTheme: 'cathedral',
+                      wallpaperFade: 'soft',
+                    });
+                  }}
                   className="text-[11px] text-stone-400 hover:text-amber-400 transition"
                 >
                   Reset Defaults
                 </button>
+              </div>
+
+              {/* Fonts Theme: Curated Typography Themes */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-stone-300 font-medium flex items-center gap-1.5">
+                    <Type className="w-3.5 h-3.5 text-amber-500" />
+                    Fonts Theme
+                  </label>
+                  <span className="text-[11px] font-mono text-amber-400">
+                    {getFontTheme(settings.fontTheme).name}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {FONT_THEMES.map((themeOption) => {
+                    const isSelected = (settings.fontTheme || 'cathedral') === themeOption.id;
+                    return (
+                      <button
+                        key={themeOption.id}
+                        type="button"
+                        onClick={() => {
+                          triggerWebHaptic('selection');
+                          setSettings({
+                            ...settings,
+                            fontTheme: themeOption.id,
+                            fontStyle: themeOption.id === 'cathedral' ? 'playfair' :
+                              themeOption.id === 'sacred_script' ? 'script' :
+                              themeOption.id === 'modern_clarity' ? 'sans' :
+                              themeOption.id === 'golden_gothic' ? 'cinzel' : 'playfair',
+                          });
+                          onFontThemeChange?.(themeOption.id);
+                        }}
+                        className={`p-2.5 rounded-xl text-left border transition relative flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-amber-600/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50 shadow-sm'
+                            : 'bg-stone-850/80 border-stone-800 text-stone-300 hover:bg-stone-800 hover:text-white'
+                        }`}
+                        title={themeOption.description}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="text-xs font-semibold">{themeOption.name}</span>
+                          {isSelected && <Check className="w-3 h-3 text-amber-400 shrink-0" />}
+                        </div>
+                        <span className="text-[10px] text-stone-400 leading-tight block mb-1">
+                          {themeOption.subtitle}
+                        </span>
+                        <span className={`text-[11px] truncate block opacity-90 ${themeOption.verseFontClass}`}>
+                          Sample: "The Lord is my light"
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Wallpaper Fading: Vignette & Softening */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-stone-300 font-medium flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    Wallpaper Fading & Vignette
+                  </label>
+                  <span className="text-[11px] font-mono text-amber-400">
+                    {WALLPAPER_FADE_OPTIONS.find((f) => f.id === (settings.wallpaperFade || 'soft'))?.name}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {WALLPAPER_FADE_OPTIONS.map((fadeOpt) => {
+                    const isSelected = (settings.wallpaperFade || 'soft') === fadeOpt.id;
+                    return (
+                      <button
+                        key={fadeOpt.id}
+                        type="button"
+                        onClick={() => {
+                          triggerWebHaptic('selection');
+                          setSettings({
+                            ...settings,
+                            wallpaperFade: fadeOpt.id,
+                          });
+                        }}
+                        className={`py-2 px-2.5 rounded-xl text-xs font-medium border text-left transition flex flex-col gap-0.5 ${
+                          isSelected
+                            ? 'bg-amber-600/20 border-amber-500 text-amber-300 ring-1 ring-amber-500/50 shadow-sm'
+                            : 'bg-stone-850/80 border-stone-800 text-stone-300 hover:bg-stone-800 hover:text-white'
+                        }`}
+                        title={fadeOpt.description}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="font-semibold text-xs">{fadeOpt.name}</span>
+                          {isSelected && <Check className="w-3 h-3 text-amber-400 shrink-0" />}
+                        </div>
+                        <span className="text-[10px] text-stone-400 truncate">{fadeOpt.subtitle}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Basic Image Adjustment Feature: Grayscale & Sepia Filters */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-stone-300 font-medium flex items-center gap-1.5">
+                    <Palette className="w-3.5 h-3.5 text-amber-500" />
+                    Image Tone & Filter
+                  </label>
+                  <span className="text-[11px] font-mono text-amber-400 capitalize">
+                    {settings.imageFilter === 'none' ? 'Vibrant Color' : settings.imageFilter === 'grayscale' ? 'B&W Grayscale' : 'Warm Sepia'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'none', label: 'Color', desc: 'Original', icon: Sparkles },
+                    { id: 'grayscale', label: 'Grayscale', desc: 'Black & White', icon: Moon },
+                    { id: 'sepia', label: 'Sepia', desc: 'Warm Vintage', icon: Sun },
+                  ].map((filterOption) => {
+                    const isSelected = (settings.imageFilter || 'none') === filterOption.id;
+                    const IconComp = filterOption.icon;
+                    return (
+                      <button
+                        key={filterOption.id}
+                        type="button"
+                        onClick={() => {
+                          triggerWebHaptic('selection');
+                          setSettings({
+                            ...settings,
+                            imageFilter: filterOption.id as ImageFilter,
+                          });
+                        }}
+                        className={`py-2 px-2 rounded-xl text-xs font-medium border text-center transition flex flex-col items-center gap-0.5 relative ${
+                          isSelected
+                            ? 'bg-amber-600/25 border-amber-500 text-amber-300 shadow-sm ring-1 ring-amber-500/50'
+                            : 'bg-stone-800/80 border-stone-700/80 text-stone-300 hover:bg-stone-750 hover:text-white'
+                        }`}
+                        title={`Apply ${filterOption.label} filter to wallpaper`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <IconComp className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-400' : 'text-stone-400'}`} />
+                          <span className="font-semibold">{filterOption.label}</span>
+                        </div>
+                        <span className="text-[10px] text-stone-400">{filterOption.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Typography */}

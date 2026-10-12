@@ -1,3 +1,3 @@
-app_identifier("com.example.biblewallpapers")
+app_identifier("com.DK.biblewallpapers")
 json_key_file("fastlane/play-store-credentials.json")
-package_name("com.example.biblewallpapers")
+package_name("com.DK.biblewallpapers")

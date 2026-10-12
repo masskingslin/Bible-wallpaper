@@ -4,7 +4,8 @@ import {
   Copy, Check, RefreshCw, Zap, Bookmark, Heart,
   Volume2, VolumeX
 } from 'lucide-react';
-import { Wallpaper } from '../types';
+import { Wallpaper, FontThemeId, WallpaperFadeMode } from '../types';
+import { getFontTheme } from '../utils/fontThemes';
 import { shareWallpaper } from '../utils/shareUtils';
 import { isSpeechSynthesisSupported, narrateScripture, stopScriptureNarration } from '../utils/speechUtils';
 
@@ -17,6 +18,9 @@ interface DailyVerseBannerProps {
   onOpenUpgradeModal: () => void;
   onToggleFavorite: (id: string) => void;
   favorites: string[];
+  fontTheme?: FontThemeId;
+  wallpaperFade?: WallpaperFadeMode;
+  onInteract?: () => void;
 }
 
 export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
@@ -28,6 +32,9 @@ export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
   onOpenUpgradeModal,
   onToggleFavorite,
   favorites,
+  fontTheme = 'cathedral',
+  wallpaperFade = 'soft',
+  onInteract,
 }) => {
   const [dailyVerse, setDailyVerse] = useState<Wallpaper | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +67,7 @@ export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
       setIsSpeaking(false);
     } else {
       setIsSpeaking(true);
+      onInteract?.();
       narrateScripture(dailyVerse.verseText, dailyVerse.verseReference, dailyVerse.language, {
         onStart: () => setIsSpeaking(true),
         onEnd: () => setIsSpeaking(false),
@@ -108,6 +116,7 @@ export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
 
   const handleCopy = () => {
     if (!dailyVerse) return;
+    onInteract?.();
     navigator.clipboard.writeText(`"${dailyVerse.verseText}" — ${dailyVerse.verseReference}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -115,6 +124,7 @@ export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
 
   const handleShare = async () => {
     if (!dailyVerse) return;
+    onInteract?.();
     const result = await shareWallpaper(dailyVerse);
     if (result.shared) {
       setShared(true);
@@ -174,10 +184,20 @@ export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
             title="Click to preview on lock screen"
           >
             <img
+              key={dailyVerse.id}
               src={dailyVerse.imageUrl}
               alt={dailyVerse.verseReference}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover animate-wallpaper-fade transition-transform duration-500 group-hover:scale-105"
             />
+            {wallpaperFade === 'soft' && (
+              <div className="absolute inset-0 wallpaper-fade-soft pointer-events-none" />
+            )}
+            {wallpaperFade === 'deep' && (
+              <div className="absolute inset-0 wallpaper-fade-deep pointer-events-none" />
+            )}
+            {wallpaperFade === 'dreamy' && (
+              <div className="absolute inset-0 wallpaper-fade-dreamy pointer-events-none" />
+            )}
             <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 transition-colors" />
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <Smartphone className="w-5 h-5 text-white drop-shadow" />
@@ -231,16 +251,37 @@ export const DailyVerseBanner: React.FC<DailyVerseBannerProps> = ({
               )}
             </div>
 
-            {/* Main Scripture Text */}
-            <blockquote className={`font-serif-scripture italic text-base sm:text-lg leading-snug line-clamp-2 md:line-clamp-3 ${
+            {/* Visual Cadence Progress Bar */}
+            <div className="w-full max-w-sm pt-0.5 pb-0.5">
+              <div className="flex items-center justify-between text-[10px] text-stone-400 mb-1 font-mono">
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                  <span>Automatic rotation progress</span>
+                </span>
+                <span className="text-amber-500 font-semibold">{formatCountdown(remainingSeconds)} left</span>
+              </div>
+              <div className={`w-full h-1.5 rounded-full overflow-hidden ${
+                isLight ? 'bg-amber-900/15' : 'bg-stone-800'
+              }`}>
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-400 rounded-full transition-all duration-1000 ease-linear"
+                  style={{
+                    width: `${Math.min(100, Math.max(2, (((isPremiumUser ? 3600 : 86400) - remainingSeconds) / (isPremiumUser ? 3600 : 86400)) * 100))}%`
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Main Scripture Text with Active Fonts Theme */}
+            <blockquote className={`${getFontTheme(fontTheme).verseFontClass} text-base sm:text-lg leading-snug line-clamp-2 md:line-clamp-3 ${
               isLight ? 'text-stone-900 font-medium' : 'text-stone-100'
             }`}>
               "{dailyVerse.verseText}"
             </blockquote>
 
-            {/* Reference & Language */}
+            {/* Reference & Language with Active Fonts Theme */}
             <div className="flex items-center gap-3 pt-0.5">
-              <span className={`font-cinzel text-xs sm:text-sm font-bold tracking-wider ${
+              <span className={`${getFontTheme(fontTheme).refFontClass} text-xs sm:text-sm font-bold tracking-wider ${
                 isLight ? 'text-amber-800' : 'text-amber-300'
               }`}>
                 — {dailyVerse.verseReference} —

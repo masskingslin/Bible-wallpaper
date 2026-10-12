@@ -31,3 +31,7 @@
 -keep class * extends androidx.work.ListenableWorker {
     public <init>(android.content.Context, androidx.work.WorkerParameters);
 }
+
+# Data DTOs
+-keepclassmembers class com.DK.biblewallpapers.data.remote.** { *; }
+-keep class com.DK.biblewallpapers.data.remote.** { *; }

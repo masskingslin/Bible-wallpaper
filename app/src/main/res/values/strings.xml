@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bible Wallpapers</string>
+    <string name="widget_description">Display daily Bible scripture verse wallpapers on your home screen</string>
+    <string name="daily_verse_title">Daily Verse Blessing</string>
+    <string name="set_wallpaper">Set Wallpaper</string>
+    <string name="lock_screen">Lock Screen</string>
+    <string name="home_screen">Home Screen</string>
+    <string name="both_screens">Both Screens</string>
+    <string name="share">Share Verse</string>
+    <string name="download">Download Wallpaper</string>
+    <string name="listen_to_verse">Listen to Verse</string>
+    <string name="hourly_rotation">Automatic 1-Hour Lock Screen Rotation</string>
+</resources>

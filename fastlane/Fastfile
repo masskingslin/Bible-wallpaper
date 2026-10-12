@@ -1,20 +1,30 @@
 default_platform(:android)
 
 platform :android do
-  desc "Deploy a new build to Google Play Closed Track"
-  lane :deploy_internal do
+  desc "Build signed AAB and deploy to Google Play"
+  lane :deploy_play_store do |options|
+    track = options[:track] || ENV["PLAY_STORE_TRACK"] || "internal"
+
     gradle(
-      task: "bundle",
-      build_type: "Release",
-      project_dir: "./app"
+      task: ":app:bundleRelease",
+      project_dir: "."
     )
 
     upload_to_play_store(
-      track: "internal",
+      track: track,
+      json_key: "fastlane/play-store-credentials.json",
       aab: "app/build/outputs/bundle/release/app-release.aab",
       skip_upload_metadata: true,
       skip_upload_images: true,
       skip_upload_screenshots: true
     )
+  end
+
+  lane :deploy_internal do
+    deploy_play_store(track: "internal")
+  end
+
+  lane :deploy_closed do
+    deploy_play_store(track: "closed")
   end
 end
