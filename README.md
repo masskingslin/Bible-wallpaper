@@ -50,17 +50,39 @@ Visit `http://localhost:3000` in your browser.
 
 ---
 
-## 🔒 GitHub Actions Secrets (Play Store Closed Track Deploy)
+## 📱 Building Android APKs on GitHub Actions
 
-When pushing to `main`, `.github/workflows/deploy_closed_track.yml` runs if configured. To enable Play Store automated builds, configure the following secrets in GitHub Settings -> Secrets and variables -> Actions:
+This repository includes a dedicated workflow (`.github/workflows/build_apk.yml`) that automatically compiles and packages installable Android APKs (`app-debug.apk` and `app-release.apk`) on GitHub:
 
-| Secret Name | Description |
-|---|---|
-| `PLAY_STORE_JSON_KEY` | Google Play Console Service Account Key JSON |
-| `ANDROID_KEYSTORE_BASE64` | Base64-encoded release keystore file |
-| `KEYSTORE_PASSWORD` | Password for your Android keystore |
-| `KEY_ALIAS` | Key alias inside the keystore |
-| `KEY_PASSWORD` | Password for the key alias |
+### 1. Automatic Build on Push
+Every time code is pushed to `main` or `master`, GitHub Actions builds both:
+- **`BibleWallpapers-Debug-APK`**: Immediately installable on any Android phone (no special signing required).
+- **`BibleWallpapers-Release-APK`**: Release-optimized APK (falls back to debug signing if custom keystore secrets are not configured).
+
+### 2. Manual Build via GitHub Web Interface
+1. Go to your repository on GitHub.
+2. Click the **Actions** tab at the top.
+3. Select **"Build Android APK"** from the left sidebar.
+4. Click **Run workflow** -> Select branch -> Click **Run workflow**.
+
+### 3. How to Download the APK:
+1. Click on the completed workflow run.
+2. Scroll to the **Artifacts** section at the bottom of the summary page.
+3. Click to download either `BibleWallpapers-Debug-APK` or `BibleWallpapers-Release-APK`.
+4. Unzip and transfer the `.apk` file to your Android phone to install!
+
+---
+
+## 🔒 Optional GitHub Secrets
+
+| Secret Name | Purpose | Required for APK build? |
+|---|---|---|
+| `ANDROID_KEYSTORE_BASE64` | Base64-encoded release `.jks` or `.keystore` | ❌ No (auto falls back to debug signing) |
+| `KEYSTORE_PASSWORD` | Keystore password | ❌ No |
+| `KEY_ALIAS` | Key alias | ❌ No |
+| `KEY_PASSWORD` | Key password | ❌ No |
+| `GOOGLE_SERVICES_JSON` | Custom Firebase `google-services.json` | ❌ No (bundled fallback provided) |
+| `PLAY_STORE_JSON_KEY` | Google Play Console Service Account JSON | ❌ Only for Play Store deployment |
 
 ---
 

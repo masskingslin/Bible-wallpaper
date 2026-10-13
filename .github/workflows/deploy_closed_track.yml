@@ -20,6 +20,7 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (secrets.PLAY_STORE_JSON_KEY != '' && secrets.ANDROID_KEYSTORE_BASE64 != '') }}
 
     steps:
       - name: Check out repository

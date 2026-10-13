@@ -1,0 +1,134 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'APK Variant to build (both, debug, release)'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - debug
+          - release
+
+jobs:
+  build-apk:
+    name: Build & Package Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Prepare Google Services Configuration
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo "Using custom GOOGLE_SERVICES_JSON from repository secrets."
+            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
+          else
+            echo "Using bundled fallback app/google-services.json for build verification."
+          fi
+          test -f app/google-services.json || { echo "❌ Error: app/google-services.json is missing!"; exit 1; }
+
+      - name: Setup Keystore (if configured)
+        id: keystore-setup
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Decoding release keystore from secrets..."
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/release.keystore
+            echo "KEYSTORE_PATH=${{ github.workspace }}/release.keystore" >> $GITHUB_ENV
+            echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+            echo "signed_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "No custom keystore provided; release APK will fallback to debug signing."
+            echo "signed_release=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Debug APK
+        if: ${{ github.event.inputs.build_type != 'release' }}
+        run: |
+          echo "Building Debug APK..."
+          ./gradlew assembleDebug --stacktrace
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+
+      - name: Build Release APK
+        if: ${{ github.event.inputs.build_type != 'debug' }}
+        run: |
+          echo "Building Release APK..."
+          ./gradlew assembleRelease --stacktrace
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+
+      - name: Inspect and Organize Generated APKs
+        run: |
+          echo "=== Generated APK Files ==="
+          mkdir -p output-apks
+          find app/build/outputs/apk -name "*.apk" -type f | while read -r apk_file; do
+            filename=$(basename "$apk_file")
+            filesize=$(ls -lh "$apk_file" | awk '{print $5}')
+            echo "Found APK: $filename ($filesize)"
+            cp "$apk_file" "output-apks/$filename"
+          done
+
+      - name: Upload Debug APK Artifact
+        if: ${{ github.event.inputs.build_type != 'release' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: BibleWallpapers-Debug-APK-run-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload Release APK Artifact
+        if: ${{ github.event.inputs.build_type != 'debug' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: BibleWallpapers-Release-APK-run-${{ github.run_number }}
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Generate Actions Step Summary
+        run: |
+          echo "### 📱 Android APK Build Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Path | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            DEBUG_SIZE=$(ls -lh app/build/outputs/apk/debug/app-debug.apk | awk '{print $5}')
+            echo "| **Debug APK** | \`app-debug.apk\` ($DEBUG_SIZE) | ✅ Ready to install |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            RELEASE_SIZE=$(ls -lh app/build/outputs/apk/release/app-release.apk | awk '{print $5}')
+            echo "| **Release APK** | \`app-release.apk\` ($RELEASE_SIZE) | ✅ Ready to install |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### 📥 How to Install:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download the APK artifact from the **Artifacts** section at the bottom of this summary." >> $GITHUB_STEP_SUMMARY
+          echo "2. Transfer or download the \`.apk\` to your Android device." >> $GITHUB_STEP_SUMMARY
+          echo "3. Tap the file and choose **Install** (allow installation from unknown sources if prompted)." >> $GITHUB_STEP_SUMMARY
