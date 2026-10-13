@@ -1,12 +1,36 @@
+# General ProGuard / R8 Rules
+-ignorewarnings
+-dontwarn **
 -keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
 
-# Jetpack Room
+# Jetpack Room & AndroidX
 -keepclassmembers class * extends androidx.room.RoomDatabase {
     public void clearAllTables();
     <methods>;
 }
 -keep class * extends androidx.room.RoomDatabase
--dontwarn androidx.room.paging.**
+-dontwarn androidx.**
+-keep class androidx.compose.** { *; }
+
+# Kotlinx Serialization & Coroutines
+-dontwarn kotlinx.serialization.**
+-keepclassmembers class * {
+    *** Companion;
+}
+-keepclasseswithmembers class * {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Retrofit, OkHttp, Gson
+-dontwarn retrofit2.**
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class retrofit2.** { *; }
+-keep class okhttp3.** { *; }
+-keep class com.google.gson.** { *; }
+-keepclassmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
 
 # Play Billing
 -keep class com.android.billingclient.api.** { *; }
@@ -32,6 +56,7 @@
     public <init>(android.content.Context, androidx.work.WorkerParameters);
 }
 
-# Data DTOs
--keepclassmembers class com.DK.biblewallpapers.data.remote.** { *; }
--keep class com.DK.biblewallpapers.data.remote.** { *; }
+# Data Models & DTOs
+-keepclassmembers class com.DK.biblewallpapers.** { *; }
+-keep class com.DK.biblewallpapers.** { *; }
+

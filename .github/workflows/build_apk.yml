@@ -3,17 +3,15 @@ name: Build Android APK
 on:
   push:
     branches:
-      - main
-      - master
+      - '**'
   pull_request:
     branches:
-      - main
-      - master
+      - '**'
   workflow_dispatch:
     inputs:
       build_type:
         description: 'APK Variant to build (both, debug, release)'
-        required: true
+        required: false
         default: 'both'
         type: choice
         options:
@@ -67,7 +65,8 @@ jobs:
           fi
 
       - name: Build Debug APK
-        if: ${{ github.event.inputs.build_type != 'release' }}
+        id: build_debug
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'both' || inputs.build_type == 'debug' || inputs.build_type == '' }}
         run: |
           echo "Building Debug APK..."
           ./gradlew assembleDebug --stacktrace
@@ -76,7 +75,8 @@ jobs:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
 
       - name: Build Release APK
-        if: ${{ github.event.inputs.build_type != 'debug' }}
+        id: build_release
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'both' || inputs.build_type == 'release' }}
         run: |
           echo "Building Release APK..."
           ./gradlew assembleRelease --stacktrace
@@ -84,36 +84,49 @@ jobs:
           BUILD_NUMBER: ${{ github.run_number }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
 
-      - name: Inspect and Organize Generated APKs
+      - name: Inspect Generated APKs
+        if: always()
         run: |
           echo "=== Generated APK Files ==="
           mkdir -p output-apks
           find app/build/outputs/apk -name "*.apk" -type f | while read -r apk_file; do
             filename=$(basename "$apk_file")
             filesize=$(ls -lh "$apk_file" | awk '{print $5}')
-            echo "Found APK: $filename ($filesize)"
+            echo "Found APK: $filename ($filesize) at $apk_file"
             cp "$apk_file" "output-apks/$filename"
           done
+          echo "Contents of output-apks:"
+          ls -la output-apks || true
 
       - name: Upload Debug APK Artifact
-        if: ${{ github.event.inputs.build_type != 'release' }}
+        if: ${{ always() && (steps.build_debug.outcome == 'success') }}
         uses: actions/upload-artifact@v4
         with:
-          name: BibleWallpapers-Debug-APK-run-${{ github.run_number }}
+          name: BibleWallpapers-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          if-no-files-found: ignore
           retention-days: 30
 
       - name: Upload Release APK Artifact
-        if: ${{ github.event.inputs.build_type != 'debug' }}
+        if: ${{ always() && (steps.build_release.outcome == 'success') }}
         uses: actions/upload-artifact@v4
         with:
-          name: BibleWallpapers-Release-APK-run-${{ github.run_number }}
+          name: BibleWallpapers-Release-APK
           path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: warn
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload All Built APKs (Unified Bundle)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BibleWallpapers-APKs-run-${{ github.run_number }}
+          path: output-apks/*.apk
+          if-no-files-found: ignore
           retention-days: 30
 
       - name: Generate Actions Step Summary
+        if: always()
         run: |
           echo "### 📱 Android APK Build Complete!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -128,7 +141,7 @@ jobs:
             echo "| **Release APK** | \`app-release.apk\` ($RELEASE_SIZE) | ✅ Ready to install |" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### 📥 How to Install:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Download the APK artifact from the **Artifacts** section at the bottom of this summary." >> $GITHUB_STEP_SUMMARY
-          echo "2. Transfer or download the \`.apk\` to your Android device." >> $GITHUB_STEP_SUMMARY
-          echo "3. Tap the file and choose **Install** (allow installation from unknown sources if prompted)." >> $GITHUB_STEP_SUMMARY
+          echo "#### 📥 How to Access Artifacts on GitHub:" >> $GITHUB_STEP_SUMMARY
+          echo "1. On the GitHub Actions run summary page, scroll to the **Artifacts** section at the bottom." >> $GITHUB_STEP_SUMMARY
+          echo "2. Click **BibleWallpapers-Debug-APK** or **BibleWallpapers-Release-APK** to download." >> $GITHUB_STEP_SUMMARY
+          echo "3. Transfer the \`.apk\` to your Android phone or tablet and tap to install." >> $GITHUB_STEP_SUMMARY
