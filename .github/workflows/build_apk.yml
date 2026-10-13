@@ -118,7 +118,16 @@ EOF
           BUILD_NUMBER: ${{ github.run_number }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
 
-      - name: Inspect Generated APKs
+      - name: Build Google Play Bundle (AAB)
+        id: build_aab
+        run: |
+          echo "Building Google Play Android App Bundle (.aab)..."
+          ./gradlew bundleRelease --stacktrace
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+
+      - name: Inspect Generated APKs & Bundles
         if: always()
         run: |
           echo "=== Generated APK Files ==="
@@ -129,8 +138,10 @@ EOF
             echo "Found APK: $filename ($filesize) at $apk_file"
             cp "$apk_file" "output-apks/$filename"
           done
-          echo "Contents of output-apks:"
-          ls -la output-apks || true
+          echo "=== Generated AAB Files ==="
+          find app/build/outputs/bundle -name "*.aab" -type f | while read -r aab_file; do
+            echo "Found AAB: $(basename "$aab_file") ($(ls -lh "$aab_file" | awk '{print $5}'))"
+          done
 
       - name: Upload Debug APK Artifact
         if: ${{ always() && (steps.build_debug.outcome == 'success') }}
@@ -147,6 +158,15 @@ EOF
         with:
           name: BibleWallpapers-Release-APK
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload Google Play AAB Artifact (Ready to Upload in Play Console)
+        if: ${{ always() && (steps.build_aab.outcome == 'success') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: BibleWallpapers-GooglePlay-AAB
+          path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: ignore
           retention-days: 30
 
