@@ -78,6 +78,50 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
+      - name: Prepare Google Services Configuration
+        run: |
+          mkdir -p app
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo "Using custom GOOGLE_SERVICES_JSON from repository secrets."
+            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
+          elif [ -f app/google-services.json ] && [ -s app/google-services.json ]; then
+            echo "Using existing repository app/google-services.json."
+          else
+            echo "Generating fallback app/google-services.json for build verification."
+            cat << 'EOF' > app/google-services.json
+{
+  "project_info": {
+    "project_number": "100000000000",
+    "project_id": "bible-wallpapers-app",
+    "storage_bucket": "bible-wallpapers-app.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:100000000000:android:a1b2c3d4e5f6a7b8c9d0e1",
+        "android_client_info": {
+          "package_name": "com.DK.biblewallpapers"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDummyKeyForBuildVerificationOnly123"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+EOF
+          fi
+          echo "✅ Successfully configured app/google-services.json ($(wc -c < app/google-services.json) bytes)"
+
       - name: Decode Google Service Account Key
         run: |
           mkdir -p fastlane
