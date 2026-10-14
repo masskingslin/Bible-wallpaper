@@ -82,7 +82,12 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('haptics');
   const [isTopicsModalOpen, setIsTopicsModalOpen] = useState<boolean>(false);
-  const [isPremiumUser, setIsPremiumUser] = useState<boolean>(false);
+  const [isPremiumUser, setIsPremiumUser] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && (
+      localStorage.getItem('bible_wallpapers_premium') === 'true' || 
+      Boolean(localStorage.getItem('bible_wallpapers_vip_token'))
+    );
+  });
 
   const openSettings = (tab: SettingsTab = 'haptics') => {
     triggerWebHaptic('selection');

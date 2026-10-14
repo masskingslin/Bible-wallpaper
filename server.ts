@@ -11,6 +11,11 @@ import {
   handleQuoteByIdRequest
 } from './server/api/wallpapers.js';
 import { handleSubscriptionVerification } from './server/api/verify-subscription.js';
+import { 
+  handleRazorpayConfig, 
+  handleCreateRazorpayOrder, 
+  handleVerifyRazorpayPayment 
+} from './server/api/razorpay.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,6 +36,11 @@ async function startServer() {
   app.get('/api/quotes/:id', handleQuoteByIdRequest);
   app.all('/api/auto-change-settings', handleAutoChangeSettings);
   app.post('/api/verify-subscription', handleSubscriptionVerification);
+
+  // Razorpay VIP Subscription Endpoints
+  app.get('/api/razorpay/config', handleRazorpayConfig);
+  app.post('/api/razorpay/create-order', handleCreateRazorpayOrder);
+  app.post('/api/razorpay/verify-payment', handleVerifyRazorpayPayment);
 
   // Download Android Fixes Zip Bundle
   app.get(['/api/download-android-zip', '/android-bundle.zip'], (_req, res) => {

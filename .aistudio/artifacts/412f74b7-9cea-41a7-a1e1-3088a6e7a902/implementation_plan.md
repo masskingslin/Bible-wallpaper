@@ -98,4 +98,6 @@ Comprehensive product blueprint and architecture for Bible Wallpapers, integrati
 - [x] Download Preview Modal with format conversion (PNG/JPEG/WEBP) and resolution options.
 - [x] GitHub Actions workflow `.github/workflows/build_apk.yml` with resilient artifact packaging.
 - [x] ProGuard rules hardened with `-ignorewarnings` and `-dontwarn **`.
+
+- [x] Razorpay VIP Subscription Payment Integration (UPI, Cards, NetBanking, INR ₹199/mo & ₹999 lifetime).
 - [x] AI Studio Build artifact published to `.aistudio/artifacts/brain/412f74b7-9cea-41a7-a1e1-3088a6e7a902/implementation_plan.md`.
